@@ -4,9 +4,9 @@ PHPStan Type Documentation is an IntelliJ IDEA plugin that shows Quick Documenta
 
 Supported target:
 
-- IntelliJ IDEA Ultimate 2025.3.6
-- PHP plugin 253.32098.37
-- IntelliJ build range 253 through 253.*
+- IntelliJ IDEA Ultimate 2026.2.0.1
+- PHP plugin 262.8665.176
+- IntelliJ build range 262 through 262.*
 
 Example:
 
@@ -43,7 +43,11 @@ Install `build/distributions/*.zip` using the IDE's local plugin installation ac
 
 Requirements:
 
-- Java 21
+- Java 25. The platform and PHP plugin JARs of build 262 are Java 25 bytecode (class file version 69), so an older JDK cannot read them. If the JDK is not on a path Gradle scans, pass it explicitly:
+
+```shell
+JAVA_HOME=/path/to/jdk-25 ./gradlew test
+```
 
 Useful commands:
 
@@ -63,4 +67,4 @@ The plugin does not run PHPStan, PHP, external processes, or network requests at
 - Inherited aliases are not resolved implicitly.
 - Nested aliases are not fully expanded or linkified.
 - PHPStan `typeAliases` from config files are not supported.
-- The Documentation Target API used by IntelliJ 2025.3 is marked experimental by the platform.
+- `DocumentationTarget` and `DocumentationTargetProvider` are marked `@ApiStatus.OverrideOnly` by the platform. Their signatures are unchanged between build 253 and 262, but the plugin targets a single IDE major version because the platform does not guarantee that.
