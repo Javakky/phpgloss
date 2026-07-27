@@ -1,0 +1,18 @@
+<idea-plugin>
+    <id>dev.javakky.phpstan-type-documentation</id>
+    <name>PHPStan Type Documentation</name>
+    <vendor email="dev@javakky.dev">javakky</vendor>
+    <description><![CDATA[
+        Shows Quick Documentation and Go to Declaration for PHPStan type aliases in PHPDoc.
+    ]]></description>
+
+    <depends>com.intellij.modules.platform</depends>
+    <depends>com.jetbrains.php</depends>
+
+    <extensions defaultExtensionNs="com.intellij">
+        <fileBasedIndex implementation="dev.javakky.phpstantypedoc.index.PhpStanTypeAliasIndex"/>
+        <gotoDeclarationHandler implementation="dev.javakky.phpstantypedoc.PhpStanTypeGotoDeclarationHandler"/>
+        <platform.backend.documentation.targetProvider implementation="dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider"/>
+    </extensions>
+</idea-plugin>
+
