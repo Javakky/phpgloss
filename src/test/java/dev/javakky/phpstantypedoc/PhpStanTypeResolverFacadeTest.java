@@ -5,6 +5,19 @@ import com.jetbrains.php.lang.PhpFileType;
 import dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider;
 
 public final class PhpStanTypeResolverFacadeTest extends BasePlatformTestCase {
+    private static final String DECLARATIONS = """
+            <?php
+            namespace App;
+
+            /** @phpstan-type UserData array{id: positive-int} */
+            final class User {}
+
+            /**
+             * @phpstan-import-type UserData from User as CreateUserData
+             */
+            final class CreateUser {}
+            """;
+
     public void testResolvesClassAliasFromMethodPhpDoc() {
         String source = """
                 <?php
@@ -33,6 +46,40 @@ public final class PhpStanTypeResolverFacadeTest extends BasePlatformTestCase {
         assertEquals("UserData", resolved.orElseThrow().resolvedType().requestedName());
         assertTrue(resolved.orElseThrow().resolvedType().typeBody().contains("id: positive-int"));
         assertEquals("App\\Domain\\User", resolved.orElseThrow().resolvedType().definingClassFqcn());
+    }
+
+    public void testResolvesAliasDeclarationName() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, DECLARATIONS);
+        int offset = DECLARATIONS.indexOf("UserData");
+
+        var resolved = new PhpStanTypeResolverFacade().resolveAt(file, offset).orElseThrow();
+
+        assertEquals("UserData", resolved.resolvedType().requestedName());
+        assertTrue(resolved.resolvedType().typeBody().contains("id: positive-int"));
+        assertEquals("App\\User", resolved.resolvedType().definingClassFqcn());
+    }
+
+    public void testResolvesImportedAliasByOriginalName() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, DECLARATIONS);
+        int offset = DECLARATIONS.indexOf("UserData", DECLARATIONS.indexOf("@phpstan-import-type"));
+
+        var resolved = new PhpStanTypeResolverFacade().resolveAt(file, offset).orElseThrow();
+
+        assertEquals("UserData", resolved.resolvedType().requestedName());
+        assertTrue(resolved.resolvedType().imported());
+        assertEquals("App\\User", resolved.resolvedType().definingClassFqcn());
+    }
+
+    public void testResolvesImportedAliasByLocalName() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, DECLARATIONS);
+        int offset = DECLARATIONS.indexOf("CreateUserData");
+
+        var resolved = new PhpStanTypeResolverFacade().resolveAt(file, offset).orElseThrow();
+
+        assertEquals("CreateUserData", resolved.resolvedType().requestedName());
+        assertEquals("UserData", resolved.resolvedType().originalName());
+        assertTrue(resolved.resolvedType().imported());
+        assertEquals("App\\User", resolved.resolvedType().definingClassFqcn());
     }
 
     public void testProvidesDocumentationAndDefinitionNavigation() {

@@ -12,6 +12,9 @@ import com.intellij.psi.util.PsiTreeUtil;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
 import com.jetbrains.php.lang.psi.elements.PhpClass;
 import dev.javakky.phpstantypedoc.model.PhpStanResolvedType;
+import dev.javakky.phpstantypedoc.model.PhpStanTypeAliasDefinition;
+import dev.javakky.phpstantypedoc.model.PhpStanTypeImport;
+import dev.javakky.phpstantypedoc.model.SourceRange;
 import dev.javakky.phpstantypedoc.parser.DetectedTypeReference;
 import dev.javakky.phpstantypedoc.parser.PhpDocTypeReferenceDetector;
 import dev.javakky.phpstantypedoc.parser.PhpFileModel;
@@ -43,28 +46,35 @@ public final class PhpStanTypeResolverFacade {
             PsiElement offsetElement = psiFile.findElementAt(offset);
             PhpDocComment referenceDoc = PsiTreeUtil.getParentOfType(offsetElement, PhpDocComment.class, false);
             PhpClass containingClass = PsiTreeUtil.getParentOfType(referenceDoc, PhpClass.class, false);
-            Optional<PhpFileModel.ClassLikeDocBlock> block = findContainingClass(fileModel, containingClass);
+            // クラス自身の PHPDoc は PhpClass の子ではなく前の兄弟なので、PSI から所属クラスを
+            // 辿れない。その場合はパース済みモデルの doc 範囲から所属クラスを引く。
+            Optional<PhpFileModel.ClassLikeDocBlock> block = findContainingClass(fileModel, containingClass)
+                    .or(() -> fileModel.findDocBlockContainingOffset(offset));
             if (block.isEmpty()) {
                 return Optional.empty();
             }
             if (referenceDoc == null) {
                 return Optional.empty();
             }
-            Optional<DetectedTypeReference> reference = referenceDetector.detect(
+            Optional<TypeNameLookup> lookup = referenceDetector.detect(
                     referenceDoc.getText(),
                     referenceDoc.getTextRange().getStartOffset(),
                     offset
-            );
-            if (reference.isEmpty()) {
+            ).map(TypeNameLookup::ofReference);
+            if (lookup.isEmpty()) {
+                lookup = detectDeclarationName(block.get(), offset);
+            }
+            if (lookup.isEmpty()) {
                 return Optional.empty();
             }
             ProjectPhpStanTypeSourceProvider sourceProvider = new ProjectPhpStanTypeSourceProvider(project, fileModel, virtualFile);
-            PhpStanResolvedType resolved = resolver.resolve(reference.get().name(), fileModel, block.get(), sourceProvider);
+            DetectedTypeReference reference = lookup.get().reference();
+            PhpStanResolvedType resolved = resolver.resolve(reference.name(), lookup.get().lookupName(), fileModel, block.get(), sourceProvider);
             if (resolved.unresolved()) {
                 return Optional.empty();
             }
             VirtualFile definitionFile = locateDefinitionFile(project, virtualFile, fileModel, resolved);
-            return Optional.of(new ResolvedPhpStanTypeTarget(resolved, reference.get(), definitionFile));
+            return Optional.of(new ResolvedPhpStanTypeTarget(resolved, reference, definitionFile));
         } catch (ProcessCanceledException e) {
             throw e;
         } catch (IndexNotReadyException e) {
@@ -73,6 +83,32 @@ public final class PhpStanTypeResolverFacade {
             LOG.warn("Unexpected PHPStan type documentation failure", e);
             return Optional.empty();
         }
+    }
+
+    /**
+     * エイリアスの宣言行そのものにキャレットがある場合を拾う。
+     * 型参照の検出 ({@link PhpDocTypeReferenceDetector}) は {@code @param} 等のタグを見るので、
+     * 宣言行はパース済みモデルが持つ名前の範囲と突き合わせる。
+     */
+    private Optional<TypeNameLookup> detectDeclarationName(PhpFileModel.ClassLikeDocBlock block, int offset) {
+        for (PhpStanTypeAliasDefinition alias : block.aliases()) {
+            if (alias.aliasNameRange().containsExclusiveEnd(offset)) {
+                return Optional.of(declarationLookup(alias.aliasName(), alias.aliasNameRange(), alias.aliasName()));
+            }
+        }
+        for (PhpStanTypeImport typeImport : block.imports()) {
+            if (typeImport.localNameRange().containsExclusiveEnd(offset)) {
+                return Optional.of(declarationLookup(typeImport.localName(), typeImport.localNameRange(), typeImport.localName()));
+            }
+            if (typeImport.originalNameRange().containsExclusiveEnd(offset)) {
+                return Optional.of(declarationLookup(typeImport.originalName(), typeImport.originalNameRange(), typeImport.localName()));
+            }
+        }
+        return Optional.empty();
+    }
+
+    private TypeNameLookup declarationLookup(String displayName, SourceRange nameRange, String lookupName) {
+        return new TypeNameLookup(new DetectedTypeReference(displayName, nameRange), lookupName);
     }
 
     private Optional<PhpFileModel.ClassLikeDocBlock> findContainingClass(
@@ -97,5 +133,11 @@ public final class PhpStanTypeResolverFacade {
             return currentFile;
         }
         return FileBasedIndexSafe.findFile(project, resolved.definingClassFqcn(), resolved.originalName()).orElse(currentFile);
+    }
+
+    private record TypeNameLookup(DetectedTypeReference reference, String lookupName) {
+        static TypeNameLookup ofReference(DetectedTypeReference reference) {
+            return new TypeNameLookup(reference, reference.name());
+        }
     }
 }

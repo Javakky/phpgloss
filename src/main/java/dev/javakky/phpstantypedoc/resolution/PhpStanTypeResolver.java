@@ -25,7 +25,22 @@ public final class PhpStanTypeResolver {
             PhpFileModel.ClassLikeDocBlock currentClass,
             PhpStanTypeSourceProvider sourceProvider
     ) {
-        return resolve(requestedName, requestedName, fileModel.namespace(), fileModel.uses(), currentClass, sourceProvider, new HashSet<>(), 0, false);
+        return resolve(requestedName, requestedName, fileModel, currentClass, sourceProvider);
+    }
+
+    /**
+     * 表示名と検索名が異なる場合に使う。
+     * {@code @phpstan-import-type UserData from User as CreateUserData} の {@code UserData} は
+     * 表示は元名のままで、解決は import が張られている {@code CreateUserData} を辿る。
+     */
+    public PhpStanResolvedType resolve(
+            String requestedName,
+            String lookupName,
+            PhpFileModel fileModel,
+            PhpFileModel.ClassLikeDocBlock currentClass,
+            PhpStanTypeSourceProvider sourceProvider
+    ) {
+        return resolve(requestedName, lookupName, fileModel.namespace(), fileModel.uses(), currentClass, sourceProvider, new HashSet<>(), 0, false);
     }
 
     private PhpStanResolvedType resolve(

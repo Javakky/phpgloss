@@ -61,7 +61,8 @@ The plugin does not run PHPStan, PHP, external processes, or network requests at
 
 ## Known Limitations
 
-- Reference detection is limited to `@param`, `@return`, `@var`, `@phpstan-param`, `@phpstan-return`, and `@phpstan-var`.
+- Type references are detected in `@param`, `@return`, `@var`, `@phpstan-param`, `@phpstan-return`, and `@phpstan-var`, and in the declarations themselves: the name of a `@phpstan-type`, and both the original and the aliased name of a `@phpstan-import-type`. Other tags are not scanned.
+- On a `@phpstan-type` name, Go to Declaration navigates to that same name rather than listing usages.
 - Alias definitions and imports are limited to class, interface, trait, and enum PHPDoc.
 - Method, function, and file-level aliases are not supported.
 - Inherited aliases are not resolved implicitly.
