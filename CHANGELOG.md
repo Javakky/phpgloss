@@ -1,8 +1,13 @@
 # Changelog
 
+## 0.8.0
+
+- Link class names inside the type body. In `array{accounts: non-empty-list<Account>}` the `Account` now navigates to its class. Only capitalised identifiers are considered, so PHPStan's type keywords (all lowercase) are left alone; ambiguous names fall back to the one in the declaring class's namespace, and stay unlinked if still undecided.
+- Link the alias name and the declaring class to that class.
+
 ## 0.7.0
 
-- Present a variable as `$payload: CreateUserData`, matching how the PHP plugin renders a variable (`$user_id: int`). The alias name is a link; clicking it expands the alias into its type body. Aliases are not PSI elements, so the link uses its own scheme handled by a `linkHandler` rather than `psi_element://`.
+- Present a variable as `$payload: CreateUserData`, matching how the PHP plugin renders a variable (`$user_id: int`), followed by the type body.
 
 ## 0.6.0
 

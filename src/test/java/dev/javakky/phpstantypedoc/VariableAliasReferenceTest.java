@@ -50,36 +50,21 @@ public final class VariableAliasReferenceTest extends BasePlatformTestCase {
         assertEquals("CreateUserData", resolved.resolvedType().requestedName());
     }
 
-    public void testShowsVariableWithClickableAliasName() {
+    public void testShowsVariableWithTypeBodyAndClassLink() {
         var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
         int offset = SOURCE.lastIndexOf("$payload") + 2;
 
-        var target = new PhpStanTypeDocumentationTargetProvider()
-                .documentationTargets(file, offset).getFirst();
-        String html = target.computeDocumentation().toString();
+        String html = new PhpStanTypeDocumentationTargetProvider()
+                .documentationTargets(file, offset).getFirst()
+                .computeDocumentation()
+                .toString();
 
-        // `$payload: CreateUserData` の形で、型名がリンクになっている
+        // `$payload: CreateUserData` の形で、型本体も併せて出る
         assertTrue("変数名が出ていない: " + html, html.contains("$payload"));
         assertTrue("エイリアス名が出ていない: " + html, html.contains("CreateUserData"));
-        assertTrue("展開リンクが無い: " + html,
-                html.contains(dev.javakky.phpstantypedoc.doc.PhpStanTypeHtmlRenderer.EXPAND_LINK));
-        // 初期表示では型本体を出さない (クリックで展開する)
-        assertFalse("初期表示に型本体が出ている: " + html, html.contains("id: positive-int"));
-    }
-
-    public void testExpandLinkShowsTypeBody() {
-        var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
-        int offset = SOURCE.lastIndexOf("$payload") + 2;
-
-        var target = new PhpStanTypeDocumentationTargetProvider()
-                .documentationTargets(file, offset).getFirst();
-        var resolvedLink = new dev.javakky.phpstantypedoc.doc.PhpStanTypeLinkHandler()
-                .resolveLink(target, dev.javakky.phpstantypedoc.doc.PhpStanTypeHtmlRenderer.EXPAND_LINK);
-        assertNotNull("リンクが解決されない", resolvedLink);
-
-        var expanded = ((dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTarget) target).expanded();
-        assertTrue("展開後に型本体が出ていない",
-                expanded.computeDocumentation().toString().contains("id: positive-int"));
+        assertTrue("型本体が出ていない: " + html, html.contains("id: positive-int"));
+        // エイリアス名は定義元クラスへのリンクになっている
+        assertTrue("定義元クラスへのリンクが無い: " + html, html.contains("psi_element://\\App\\User"));
     }
 
     public void testProvidesDocumentationOnVariable() {

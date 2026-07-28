@@ -4,27 +4,37 @@ import com.intellij.lang.documentation.DocumentationMarkup;
 import dev.javakky.phpstantypedoc.model.PhpStanResolvedType;
 
 public final class PhpStanTypeHtmlRenderer {
-    /** 変数表示からエイリアスの中身へ展開するリンク。{@code PhpStanTypeLinkHandler} が処理する。 */
-    public static final String EXPAND_LINK = "phpstan-type://expand";
-
     /**
      * 変数にキャレットがある場合の表示。PHP の変数ドキュメント (`$user_id: int`) に合わせて
-     * `$payload: CreateUserData` の形にし、型名はクリックで中身へ展開できるリンクにする。
+     * `$payload: CreateUserData` の形にし、続けて型本体を出す。
      */
-    public String renderVariable(String variableName, PhpStanResolvedType resolvedType) {
-        if (resolvedType.circular()) {
-            return render(resolvedType);
-        }
-        return DocumentationMarkup.DEFINITION_START
-                + "$" + escape(variableName) + ": "
-                + "<a href=\"" + EXPAND_LINK + "\">" + escape(resolvedType.requestedName()) + "</a>"
-                + DocumentationMarkup.DEFINITION_END;
+    public String renderVariable(
+            String variableName,
+            PhpStanResolvedType resolvedType,
+            PhpStanTypeBodyLinkifier linkifier
+    ) {
+        return render(variableName, resolvedType, linkifier);
     }
 
-    public String render(PhpStanResolvedType resolvedType) {
+    public String render(PhpStanResolvedType resolvedType, PhpStanTypeBodyLinkifier linkifier) {
+        return render(null, resolvedType, linkifier);
+    }
+
+    /**
+     * @param variableName 変数名 (`$` を除く)。null なら型名だけを見出しにする
+     * @param linkifier    型本体のクラス名をリンクにする。null なら素の表示のまま
+     */
+    private String render(
+            String variableName,
+            PhpStanResolvedType resolvedType,
+            PhpStanTypeBodyLinkifier linkifier
+    ) {
+        String heading = variableName == null
+                ? aliasHeading(resolvedType)
+                : "$" + escape(variableName) + ": " + aliasHeading(resolvedType);
         if (resolvedType.circular()) {
             return DocumentationMarkup.DEFINITION_START
-                    + escape(resolvedType.requestedName())
+                    + heading
                     + DocumentationMarkup.DEFINITION_END
                     + DocumentationMarkup.CONTENT_START
                     + "Circular PHPStan type alias reference detected."
@@ -32,27 +42,44 @@ public final class PhpStanTypeHtmlRenderer {
         }
         StringBuilder builder = new StringBuilder();
         builder.append(DocumentationMarkup.DEFINITION_START)
-                .append(escape(resolvedType.requestedName()))
+                .append(heading)
                 .append(DocumentationMarkup.DEFINITION_END);
         builder.append(DocumentationMarkup.CONTENT_START);
         if (resolvedType.imported()) {
             builder.append("<p>Imported type: ")
                     .append(escape(resolvedType.originalName()))
                     .append("</p>");
-            builder.append("<p>Defined in ")
-                    .append(escape(resolvedType.definingClassFqcn()))
-                    .append("</p>");
         }
+        String typeBody = escape(resolvedType.typeBody());
         builder.append("<pre><code>")
-                .append(escape(resolvedType.typeBody()))
+                .append(linkifier == null ? typeBody : linkifier.linkify(typeBody))
                 .append("</code></pre>");
-        if (!resolvedType.imported()) {
-            builder.append("<p>Defined in ")
-                    .append(escape(resolvedType.definingClassFqcn()))
-                    .append("</p>");
-        }
+        builder.append("<p>Defined in ")
+                .append(classLink(resolvedType.definingClassFqcn()))
+                .append("</p>");
         builder.append(DocumentationMarkup.CONTENT_END);
         return builder.toString();
+    }
+
+    /** エイリアス名。定義元クラスが分かる場合はそのクラスへのリンクにする。 */
+    private String aliasHeading(PhpStanResolvedType resolvedType) {
+        String name = escape(resolvedType.requestedName());
+        String fqcn = resolvedType.definingClassFqcn();
+        if (fqcn == null || fqcn.isBlank()) {
+            return name;
+        }
+        return "<a href=\"psi_element://" + normalizeFqcn(fqcn) + "\">" + name + "</a>";
+    }
+
+    private String classLink(String fqcn) {
+        if (fqcn == null || fqcn.isBlank()) {
+            return "";
+        }
+        return "<a href=\"psi_element://" + normalizeFqcn(fqcn) + "\">" + escape(fqcn) + "</a>";
+    }
+
+    private String normalizeFqcn(String fqcn) {
+        return fqcn.startsWith("\\") ? fqcn : "\\" + fqcn;
     }
 
     public String renderHint(PhpStanResolvedType resolvedType) {
@@ -81,4 +108,3 @@ public final class PhpStanTypeHtmlRenderer {
         return builder.toString();
     }
 }
-

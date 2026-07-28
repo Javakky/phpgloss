@@ -52,16 +52,13 @@ public final class PhpStanTypeDocumentationTarget implements DocumentationTarget
 
     @Override
     public @Nullable DocumentationResult computeDocumentation() {
+        var linkifier = new PhpStanTypeBodyLinkifier(
+                file.getProject(), target.resolvedType().definingClassFqcn());
         if (target.variableName() != null) {
             return DocumentationResult.documentation(
-                    renderer.renderVariable(target.variableName(), target.resolvedType()));
+                    renderer.renderVariable(target.variableName(), target.resolvedType(), linkifier));
         }
-        return DocumentationResult.documentation(renderer.render(target.resolvedType()));
-    }
-
-    /** 変数表示のリンクから、エイリアスの中身を出す target を返す。 */
-    public PhpStanTypeDocumentationTarget expanded() {
-        return new PhpStanTypeDocumentationTarget(file, target.expanded());
+        return DocumentationResult.documentation(renderer.render(target.resolvedType(), linkifier));
     }
 }
 

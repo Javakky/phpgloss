@@ -21,10 +21,5 @@ public record ResolvedPhpStanTypeTarget(
     ) {
         this(resolvedType, reference, definitionFile, null);
     }
-
-    /** 型本体を出す形へ切り替えた値を返す。変数表示のリンクから展開するときに使う。 */
-    public ResolvedPhpStanTypeTarget expanded() {
-        return new ResolvedPhpStanTypeTarget(resolvedType, reference, definitionFile, null);
-    }
 }
 

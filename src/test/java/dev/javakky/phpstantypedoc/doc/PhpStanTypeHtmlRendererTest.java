@@ -20,7 +20,7 @@ public class PhpStanTypeHtmlRendererTest {
                 false,
                 false,
                 false
-        ));
+        ), null);
         assertTrue(html.contains("User&lt;Data&gt;"));
         assertTrue(html.contains("&quot;&lt;&amp;&#39;"));
         assertTrue(html.contains("<pre><code>array{\n    key:"));
@@ -37,9 +37,11 @@ public class PhpStanTypeHtmlRendererTest {
                 true,
                 false,
                 false
-        ));
+        ), null);
         assertTrue(html.contains("Imported type: UserData"));
-        assertTrue(html.contains("Defined in App\\Domain\\User"));
+        // 定義元クラスはリンクになる
+        assertTrue(html, html.contains("psi_element://\\App\\Domain\\User"));
+        assertTrue(html, html.contains(">App\\Domain\\User</a>"));
     }
 }
 

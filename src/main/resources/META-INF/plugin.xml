@@ -13,7 +13,6 @@
         <fileBasedIndex implementation="dev.javakky.phpstantypedoc.index.PhpStanTypeAliasIndex"/>
         <gotoDeclarationHandler implementation="dev.javakky.phpstantypedoc.PhpStanTypeGotoDeclarationHandler"/>
         <platform.backend.documentation.targetProvider implementation="dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider"/>
-        <platform.backend.documentation.linkHandler implementation="dev.javakky.phpstantypedoc.doc.PhpStanTypeLinkHandler"/>
     </extensions>
 
     <extensions defaultExtensionNs="com.jetbrains.php">
