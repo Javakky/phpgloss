@@ -10,12 +10,17 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
+import com.jetbrains.php.lang.psi.elements.Function;
+import com.jetbrains.php.lang.psi.elements.Parameter;
 import com.jetbrains.php.lang.psi.elements.PhpClass;
+import com.jetbrains.php.lang.psi.elements.PhpNamedElement;
+import com.jetbrains.php.lang.psi.elements.Variable;
 import dev.javakky.phpstantypedoc.model.PhpStanResolvedType;
 import dev.javakky.phpstantypedoc.model.PhpStanTypeAliasDefinition;
 import dev.javakky.phpstantypedoc.model.PhpStanTypeImport;
 import dev.javakky.phpstantypedoc.model.SourceRange;
 import dev.javakky.phpstantypedoc.parser.DetectedTypeReference;
+import dev.javakky.phpstantypedoc.parser.PhpDocDeclaredTypeReader;
 import dev.javakky.phpstantypedoc.parser.PhpDocTypeReferenceDetector;
 import dev.javakky.phpstantypedoc.parser.PhpFileModel;
 import dev.javakky.phpstantypedoc.parser.PhpFileModelCache;
@@ -49,10 +54,11 @@ public final class PhpStanTypeResolverFacade {
             // 辿れない。その場合はパース済みモデルの doc 範囲から所属クラスを引く。
             Optional<PhpFileModel.ClassLikeDocBlock> block = findContainingClass(fileModel, containingClass)
                     .or(() -> fileModel.findDocBlockContainingOffset(offset));
-            if (block.isEmpty()) {
-                return Optional.empty();
-            }
             if (referenceDoc == null) {
+                // PHPDoc の外。変数の上なら、その変数を宣言している `@param` の型名から解決する。
+                return resolveAtVariable(psiFile, offsetElement, fileModel);
+            }
+            if (block.isEmpty()) {
                 return Optional.empty();
             }
             Optional<TypeNameLookup> lookup = referenceDetector.detect(
@@ -82,6 +88,58 @@ public final class PhpStanTypeResolverFacade {
             LOG.warn("Unexpected PHPStan type documentation failure", e);
             return Optional.empty();
         }
+    }
+
+    /**
+     * 変数の上にキャレットがある場合の解決。その変数を宣言している `@param` の型名を辿る。
+     *
+     * <p>PHP プラグインは変数のドキュメントに解決済みの型 (`array` 等) しか出さないので、
+     * PHPDoc に書かれたエイリアス名が見えなくなる。ここで拾って型本体と定義元を出す。
+     */
+    private Optional<ResolvedPhpStanTypeTarget> resolveAtVariable(
+            PsiFile psiFile,
+            PsiElement offsetElement,
+            PhpFileModel fileModel
+    ) {
+        PhpNamedElement holder = variableHolderAt(offsetElement);
+        if (holder == null || holder.getName().isEmpty()) {
+            return Optional.empty();
+        }
+        Function function = PsiTreeUtil.getParentOfType(holder, Function.class, false);
+        if (function == null) {
+            return Optional.empty();
+        }
+        String typeName = PhpDocDeclaredTypeReader.typeNameFor(
+                function.getDocComment(), PhpDocDeclaredTypeReader.PARAM_TAGS, holder.getName());
+        if (typeName == null) {
+            return Optional.empty();
+        }
+        PhpClass containingClass = PsiTreeUtil.getParentOfType(function, PhpClass.class, false);
+        if (containingClass == null || containingClass.getFQN() == null) {
+            return Optional.empty();
+        }
+        Optional<PhpStanResolvedType> resolved = resolveInClass(psiFile, containingClass.getFQN(), typeName);
+        if (resolved.isEmpty()) {
+            return Optional.empty();
+        }
+        SourceRange nameRange = new SourceRange(
+                holder.getTextRange().getStartOffset(), holder.getTextRange().getEndOffset());
+        VirtualFile definitionFile = locateDefinitionFile(
+                psiFile.getProject(), psiFile.getVirtualFile(), fileModel, resolved.get());
+        return Optional.of(new ResolvedPhpStanTypeTarget(
+                resolved.get(), new DetectedTypeReference(typeName, nameRange), definitionFile));
+    }
+
+    /**
+     * キャレット位置の変数を返す。使用箇所は {@link Variable}、宣言側は {@link Parameter} で、
+     * PHP プラグインでは {@code Parameter} は {@code Variable} を継承していないため両方見る。
+     */
+    private PhpNamedElement variableHolderAt(PsiElement offsetElement) {
+        Variable variable = PsiTreeUtil.getParentOfType(offsetElement, Variable.class, false);
+        if (variable != null) {
+            return variable;
+        }
+        return PsiTreeUtil.getParentOfType(offsetElement, Parameter.class, false);
     }
 
     /**

@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.6.0
+
+- Show the alias on a variable. Placing the caret on a variable declared by `@param SomeAlias $var` — either the usage or the parameter itself — now shows the alias name, its type body, and navigates to the declaration. The PHP plugin only reports the resolved type (`array`), so the alias name was not reachable from the variable side.
+
 ## 0.5.0
 
 - Make imported shape resolution fast enough for key completion. The file model was re-parsed on every call, and the declaring class was found by scanning the whole definition file after an index lookup. Key completion calls this on every keystroke, so it was too slow to finish. The file model is now cached per file (invalidated on PSI change) and the declaring class comes from `PhpIndex.getClassesByFQN`.

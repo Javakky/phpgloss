@@ -20,6 +20,7 @@ import com.jetbrains.php.lang.psi.resolve.types.shapes.PhpDocArrayShapeProvider;
 import com.jetbrains.php.lang.psi.stubs.indexes.expectedArguments.PhpShapeEntriesIndex.PhpShapeEntry;
 import dev.javakky.phpstantypedoc.PhpStanTypeResolverFacade;
 import dev.javakky.phpstantypedoc.model.PhpStanResolvedType;
+import dev.javakky.phpstantypedoc.parser.PhpDocDeclaredTypeReader;
 
 import java.util.List;
 import java.util.Optional;
@@ -44,10 +45,6 @@ import java.util.Optional;
 public final class PhpStanImportedArrayShapeProvider extends PhpDocArrayShapeProvider {
     private static final Logger LOG = Logger.getInstance(PhpStanImportedArrayShapeProvider.class);
 
-    private static final List<String> PARAM_TAGS = List.of("@param", "@phpstan-param");
-    private static final List<String> RETURN_TAGS = List.of("@return", "@phpstan-return");
-    private static final List<String> VAR_TAGS = List.of("@var", "@phpstan-var");
-
     private final PhpStanTypeResolverFacade facade = new PhpStanTypeResolverFacade();
 
     @Override
@@ -57,17 +54,17 @@ public final class PhpStanImportedArrayShapeProvider extends PhpDocArrayShapePro
             return List.of();
         }
         return orImported(super.getParameterValuesInner(function, index),
-                function, PARAM_TAGS, parameters[index].getName());
+                function, PhpDocDeclaredTypeReader.PARAM_TAGS, parameters[index].getName());
     }
 
     @Override
     protected List<PhpShapeEntry> getValuesInner(Function function) {
-        return orImported(super.getValuesInner(function), function, RETURN_TAGS, null);
+        return orImported(super.getValuesInner(function), function, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
     }
 
     @Override
     public List<PhpShapeEntry> getValues(Field field) {
-        return orImported(super.getValues(field), field, VAR_TAGS, null);
+        return orImported(super.getValues(field), field, PhpDocDeclaredTypeReader.VAR_TAGS, null);
     }
 
     /**
@@ -87,7 +84,7 @@ public final class PhpStanImportedArrayShapeProvider extends PhpDocArrayShapePro
 
     private List<PhpShapeEntry> importedShapes(PhpNamedElement owner, List<String> tagNames, String parameterName) {
         try {
-            String typeName = declaredTypeName(owner.getDocComment(), tagNames, parameterName);
+            String typeName = PhpDocDeclaredTypeReader.typeNameFor(owner.getDocComment(), tagNames, parameterName);
             if (typeName == null) {
                 return List.of();
             }
@@ -155,48 +152,8 @@ public final class PhpStanImportedArrayShapeProvider extends PhpDocArrayShapePro
         return parts.length >= 2 && parts[1].equals(aliasName);
     }
 
-    /**
-     * PHPDoc タグに書かれた生の型名を返す。{@code PhpDocTag#getTagValue()} は
-     * `@param CreateUserData $payload` に対して空文字列を返すので、PHP のパーサが型と認識した
-     * {@link PhpDocType} のテキストを読む。{@code getType()} は解決済みの型を返しエイリアス名が
-     * 失われるため使えない。
-     */
-    private String declaredTypeName(PhpDocComment doc, List<String> tagNames, String parameterName) {
-        if (doc == null) {
-            return null;
-        }
-        for (String tagName : tagNames) {
-            for (PhpDocTag tag : doc.getTagElementsByName(tagName)) {
-                String typeName = typeNameFromTag(tag, parameterName);
-                if (typeName != null) {
-                    return typeName;
-                }
-            }
-        }
-        return null;
-    }
 
-    private String typeNameFromTag(PhpDocTag tag, String parameterName) {
-        if (parameterName != null && !declaresVariable(tag, parameterName)) {
-            return null;
-        }
-        PhpDocType docType = PsiTreeUtil.findChildOfType(tag, PhpDocType.class);
-        if (docType == null) {
-            return null;
-        }
-        String typeName = docType.getText();
-        return typeName == null || typeName.isBlank() ? null : typeName;
-    }
 
-    private boolean declaresVariable(PhpDocTag tag, String parameterName) {
-        String expected = "$" + parameterName;
-        for (String part : tag.getText().trim().split("\\s+")) {
-            if (part.equals(expected)) {
-                return true;
-            }
-        }
-        return false;
-    }
 
     private String stripLeadingSeparator(String fqcn) {
         return fqcn.startsWith("\\") ? fqcn.substring(1) : fqcn;
