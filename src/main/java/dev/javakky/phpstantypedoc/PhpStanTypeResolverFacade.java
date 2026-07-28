@@ -86,6 +86,39 @@ public final class PhpStanTypeResolverFacade {
     }
 
     /**
+     * 型名と所属クラスが判明している場合の解決。キャレット位置を持たない呼び出し元
+     * (array shape の提供) から使う。
+     */
+    public Optional<PhpStanResolvedType> resolveInClass(PsiFile psiFile, String classFqcn, String typeName) {
+        try {
+            ProgressManager.checkCanceled();
+            if (psiFile == null || !psiFile.isValid() || classFqcn == null || typeName == null) {
+                return Optional.empty();
+            }
+            VirtualFile virtualFile = psiFile.getVirtualFile();
+            if (virtualFile == null) {
+                return Optional.empty();
+            }
+            PhpFileModel fileModel = fileParser.parse(psiFile.getText());
+            Optional<PhpFileModel.ClassLikeDocBlock> block = fileModel.findClass(stripLeadingSeparator(classFqcn));
+            if (block.isEmpty()) {
+                return Optional.empty();
+            }
+            ProjectPhpStanTypeSourceProvider sourceProvider =
+                    new ProjectPhpStanTypeSourceProvider(psiFile.getProject(), fileModel, virtualFile);
+            PhpStanResolvedType resolved = resolver.resolve(typeName, fileModel, block.get(), sourceProvider);
+            return resolved.unresolved() ? Optional.empty() : Optional.of(resolved);
+        } catch (ProcessCanceledException e) {
+            throw e;
+        } catch (IndexNotReadyException e) {
+            return Optional.empty();
+        } catch (RuntimeException e) {
+            LOG.warn("Unexpected PHPStan type resolution failure", e);
+            return Optional.empty();
+        }
+    }
+
+    /**
      * エイリアスの宣言行そのものにキャレットがある場合を拾う。
      * 型参照の検出 ({@link PhpDocTypeReferenceDetector}) は {@code @param} 等のタグを見るので、
      * 宣言行はパース済みモデルが持つ名前の範囲と突き合わせる。
@@ -118,11 +151,11 @@ public final class PhpStanTypeResolverFacade {
         if (containingClass == null || containingClass.getFQN() == null) {
             return Optional.empty();
         }
-        String fqcn = containingClass.getFQN();
-        if (fqcn.startsWith("\\")) {
-            fqcn = fqcn.substring(1);
-        }
-        return fileModel.findClass(fqcn);
+        return fileModel.findClass(stripLeadingSeparator(containingClass.getFQN()));
+    }
+
+    private static String stripLeadingSeparator(String fqcn) {
+        return fqcn.startsWith("\\") ? fqcn.substring(1) : fqcn;
     }
 
     private VirtualFile locateDefinitionFile(Project project, VirtualFile currentFile, PhpFileModel currentFileModel, PhpStanResolvedType resolved) {

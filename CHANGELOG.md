@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.0
+
+- Resolve array shapes for `@phpstan-import-type` when the type is declared in another file. PhpStorm resolves imported shapes only within a single file, so key access on a cross-file imported shape produced `mixed`. Key completion and key access types now behave the same as for a locally declared `@phpstan-type`.
+- Same-file imports are left to the PHP plugin, which already resolves them.
+
 ## 0.3.0
 
 - Resolve type names in the alias declarations themselves: the name of a `@phpstan-type`, and both the original and the aliased name of a `@phpstan-import-type`. Previously the PHP plugin answered these positions with the class that owns the PHPDoc.

@@ -10,11 +10,11 @@ import dev.javakky.phpstantypedoc.index.PhpStanTypeAliasIndex;
 import java.util.Collection;
 import java.util.Optional;
 
-final class FileBasedIndexSafe {
+public final class FileBasedIndexSafe {
     private FileBasedIndexSafe() {
     }
 
-    static Optional<VirtualFile> findFile(Project project, String fqcn, String aliasName) {
+    public static Optional<VirtualFile> findFile(Project project, String fqcn, String aliasName) {
         if (project == null || DumbService.isDumb(project) || fqcn == null || aliasName == null) {
             return Optional.empty();
         }
