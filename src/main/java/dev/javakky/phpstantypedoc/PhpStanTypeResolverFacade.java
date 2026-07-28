@@ -95,10 +95,10 @@ public final class PhpStanTypeResolverFacade {
             if (psiFile == null || !psiFile.isValid() || classFqcn == null || typeName == null) {
                 return Optional.empty();
             }
-            VirtualFile virtualFile = psiFile.getVirtualFile();
-            if (virtualFile == null) {
-                return Optional.empty();
-            }
+            // 補完中は PSI がコピーされたファイルで動き getVirtualFile() が null になるため、
+            // 元ファイルを辿る。ここで得た VirtualFile は「同じファイルを二重に読まない」ための
+            // 目印にしか使わないので、null のままでも解決は続けられる。
+            VirtualFile virtualFile = psiFile.getOriginalFile().getVirtualFile();
             PhpFileModel fileModel = fileParser.parse(psiFile.getText());
             Optional<PhpFileModel.ClassLikeDocBlock> block = fileModel.findClass(stripLeadingSeparator(classFqcn));
             if (block.isEmpty()) {

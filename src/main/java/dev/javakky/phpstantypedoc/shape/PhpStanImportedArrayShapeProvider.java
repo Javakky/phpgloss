@@ -31,12 +31,19 @@ import java.util.Optional;
  *
  * <p>PHP プラグインの {@link PhpDocArrayShapeProvider} は import を解決するが同一ファイル内に
  * 限られる。別ファイルの定義は解決できず shape が 0 件になるため、そこだけを補う。
- * 同一ファイルの定義に対しては何も返さない (PHP 側と二重に返すと重複するため)。
+ *
+ * <p>{@link PhpDocArrayShapeProvider} を継承するのは、変数から宣言元を辿る経路
+ * ({@code collectValuesFromAssignments} / {@code getValuesFromAssignedValue}) がこのクラスで
+ * 実装されているため。キー補完はその経路を通るので、{@link PhpArrayShapesProvider} を直接
+ * 継承すると型解決だけが効いて補完が出ない。
+ *
+ * <p>各経路で先に {@code super} を呼び、PHP が解決できた場合は空を返して譲る。
+ * PHP 側の {@code PhpStanDocArrayShapeProvider} も同じ結果を返すため、二重に返すと重複する。
  *
  * <p>shape のパースは {@link PhpDocArrayShapeProvider#getArrayShapesFromDoc} に委譲する。
  * 定義元の `@phpstan-type` タグを見つけて渡すだけで、型表現は PHP の実装に揃う。
  */
-public final class PhpStanImportedArrayShapeProvider extends PhpArrayShapesProvider {
+public final class PhpStanImportedArrayShapeProvider extends PhpDocArrayShapeProvider {
     private static final Logger LOG = Logger.getInstance(PhpStanImportedArrayShapeProvider.class);
 
     private static final List<String> PARAM_TAGS = List.of("@param", "@phpstan-param");
@@ -51,17 +58,33 @@ public final class PhpStanImportedArrayShapeProvider extends PhpArrayShapesProvi
         if (index < 0 || index >= parameters.length) {
             return List.of();
         }
-        return importedShapes(function, PARAM_TAGS, parameters[index].getName());
+        return orImported(super.getParameterValuesInner(function, index),
+                function, PARAM_TAGS, parameters[index].getName());
     }
 
     @Override
     protected List<PhpShapeEntry> getValuesInner(Function function) {
-        return importedShapes(function, RETURN_TAGS, null);
+        return orImported(super.getValuesInner(function), function, RETURN_TAGS, null);
     }
 
     @Override
     public List<PhpShapeEntry> getValues(Field field) {
-        return importedShapes(field, VAR_TAGS, null);
+        return orImported(super.getValues(field), field, VAR_TAGS, null);
+    }
+
+    /**
+     * PHP が解決できた場合は空を返して譲る。PHP 側の provider が同じ結果を返すため。
+     */
+    private List<PhpShapeEntry> orImported(
+            List<PhpShapeEntry> fromPhp,
+            PhpNamedElement owner,
+            List<String> tagNames,
+            String parameterName
+    ) {
+        if (fromPhp != null && !fromPhp.isEmpty()) {
+            return List.of();
+        }
+        return importedShapes(owner, tagNames, parameterName);
     }
 
     private List<PhpShapeEntry> importedShapes(PhpNamedElement owner, List<String> tagNames, String parameterName) {
@@ -103,7 +126,7 @@ public final class PhpStanImportedArrayShapeProvider extends PhpArrayShapesProvi
         Project project = currentFile.getProject();
         Optional<VirtualFile> found = FileBasedIndexSafe.findFile(
                 project, resolved.definingClassFqcn(), resolved.originalName());
-        if (found.isEmpty() || found.get().equals(currentFile.getVirtualFile())) {
+        if (found.isEmpty() || found.get().equals(currentFile.getOriginalFile().getVirtualFile())) {
             return null;
         }
         return PsiManager.getInstance(project).findFile(found.get());
