@@ -1,8 +1,12 @@
 # Changelog
 
+## 0.7.0
+
+- Present a variable as `$payload: CreateUserData`, matching how the PHP plugin renders a variable (`$user_id: int`). The alias name is a link; clicking it expands the alias into its type body. Aliases are not PSI elements, so the link uses its own scheme handled by a `linkHandler` rather than `psi_element://`.
+
 ## 0.6.0
 
-- Show the alias on a variable. Placing the caret on a variable declared by `@param SomeAlias $var` — either the usage or the parameter itself — now shows the alias name, its type body, and navigates to the declaration. The PHP plugin only reports the resolved type (`array`), so the alias name was not reachable from the variable side.
+- Show the alias on a variable. Placing the caret on a variable declared by `@param SomeAlias $var` — either the usage or the parameter itself — now resolves the alias. The PHP plugin only reports the resolved type (`array`), so the alias name was not reachable from the variable side.
 
 ## 0.5.0
 

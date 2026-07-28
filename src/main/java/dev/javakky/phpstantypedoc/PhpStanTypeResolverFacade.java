@@ -127,7 +127,7 @@ public final class PhpStanTypeResolverFacade {
         VirtualFile definitionFile = locateDefinitionFile(
                 psiFile.getProject(), psiFile.getVirtualFile(), fileModel, resolved.get());
         return Optional.of(new ResolvedPhpStanTypeTarget(
-                resolved.get(), new DetectedTypeReference(typeName, nameRange), definitionFile));
+                resolved.get(), new DetectedTypeReference(typeName, nameRange), definitionFile, holder.getName()));
     }
 
     /**

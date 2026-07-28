@@ -4,6 +4,23 @@ import com.intellij.lang.documentation.DocumentationMarkup;
 import dev.javakky.phpstantypedoc.model.PhpStanResolvedType;
 
 public final class PhpStanTypeHtmlRenderer {
+    /** 変数表示からエイリアスの中身へ展開するリンク。{@code PhpStanTypeLinkHandler} が処理する。 */
+    public static final String EXPAND_LINK = "phpstan-type://expand";
+
+    /**
+     * 変数にキャレットがある場合の表示。PHP の変数ドキュメント (`$user_id: int`) に合わせて
+     * `$payload: CreateUserData` の形にし、型名はクリックで中身へ展開できるリンクにする。
+     */
+    public String renderVariable(String variableName, PhpStanResolvedType resolvedType) {
+        if (resolvedType.circular()) {
+            return render(resolvedType);
+        }
+        return DocumentationMarkup.DEFINITION_START
+                + "$" + escape(variableName) + ": "
+                + "<a href=\"" + EXPAND_LINK + "\">" + escape(resolvedType.requestedName()) + "</a>"
+                + DocumentationMarkup.DEFINITION_END;
+    }
+
     public String render(PhpStanResolvedType resolvedType) {
         if (resolvedType.circular()) {
             return DocumentationMarkup.DEFINITION_START
