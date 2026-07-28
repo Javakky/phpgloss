@@ -9,7 +9,7 @@ import com.intellij.psi.search.GlobalSearchScope;
 import com.intellij.util.indexing.FileBasedIndex;
 import dev.javakky.phpstantypedoc.index.PhpStanTypeAliasIndex;
 import dev.javakky.phpstantypedoc.parser.PhpFileModel;
-import dev.javakky.phpstantypedoc.parser.PhpFileModelParser;
+import dev.javakky.phpstantypedoc.parser.PhpFileModelCache;
 import dev.javakky.phpstantypedoc.resolution.PhpStanTypeSourceProvider;
 
 import java.util.Collection;
@@ -19,7 +19,6 @@ final class ProjectPhpStanTypeSourceProvider implements PhpStanTypeSourceProvide
     private final Project project;
     private final PhpFileModel currentFileModel;
     private final VirtualFile currentVirtualFile;
-    private final PhpFileModelParser fileParser = new PhpFileModelParser();
 
     ProjectPhpStanTypeSourceProvider(Project project, PhpFileModel currentFileModel, VirtualFile currentVirtualFile) {
         this.project = project;
@@ -47,7 +46,7 @@ final class ProjectPhpStanTypeSourceProvider implements PhpStanTypeSourceProvide
             if (psiFile == null || !psiFile.isValid()) {
                 continue;
             }
-            Optional<PhpFileModel.ClassLikeDocBlock> block = fileParser.parse(psiFile.getText()).findClass(fqcn);
+            Optional<PhpFileModel.ClassLikeDocBlock> block = PhpFileModelCache.of(psiFile).findClass(fqcn);
             if (block.isPresent()) {
                 return block;
             }

@@ -3,10 +3,8 @@ package dev.javakky.phpstantypedoc.shape;
 import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.progress.ProcessCanceledException;
 import com.intellij.openapi.project.IndexNotReadyException;
-import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
-import com.intellij.psi.PsiManager;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocType;
@@ -16,10 +14,10 @@ import com.jetbrains.php.lang.psi.elements.Function;
 import com.jetbrains.php.lang.psi.elements.Parameter;
 import com.jetbrains.php.lang.psi.elements.PhpClass;
 import com.jetbrains.php.lang.psi.elements.PhpNamedElement;
+import com.jetbrains.php.PhpIndex;
 import com.jetbrains.php.lang.psi.resolve.types.shapes.PhpArrayShapesProvider;
 import com.jetbrains.php.lang.psi.resolve.types.shapes.PhpDocArrayShapeProvider;
 import com.jetbrains.php.lang.psi.stubs.indexes.expectedArguments.PhpShapeEntriesIndex.PhpShapeEntry;
-import dev.javakky.phpstantypedoc.FileBasedIndexSafe;
 import dev.javakky.phpstantypedoc.PhpStanTypeResolverFacade;
 import dev.javakky.phpstantypedoc.model.PhpStanResolvedType;
 
@@ -103,11 +101,7 @@ public final class PhpStanImportedArrayShapeProvider extends PhpDocArrayShapePro
             if (resolved.isEmpty() || resolved.get().definingClassFqcn() == null) {
                 return List.of();
             }
-            PsiFile definitionFile = locateDefinitionFile(currentFile, resolved.get());
-            if (definitionFile == null) {
-                return List.of();
-            }
-            PhpDocTag aliasTag = findAliasTag(definitionFile, resolved.get());
+            PhpDocTag aliasTag = findAliasTagInAnotherFile(currentFile, resolved.get());
             return aliasTag == null ? List.of() : PhpDocArrayShapeProvider.getArrayShapesFromDoc(aliasTag);
         } catch (ProcessCanceledException e) {
             throw e;
@@ -120,21 +114,17 @@ public final class PhpStanImportedArrayShapeProvider extends PhpDocArrayShapePro
     }
 
     /**
-     * 定義元ファイルを返す。同一ファイル内の定義なら PHP プラグインが解決できるので null を返す。
+     * 定義元クラスの `@phpstan-type` タグを返す。同一ファイル内の定義は PHP プラグインが
+     * 解決できるので対象から外す。
+     *
+     * <p>クラスの取得は {@link PhpIndex#getClassesByFQN} を使う。定義元ファイルを引いてから
+     * PSI を全走査すると、1 打鍵ごとに呼ばれるキー補完では間に合わない。
      */
-    private PsiFile locateDefinitionFile(PsiFile currentFile, PhpStanResolvedType resolved) {
-        Project project = currentFile.getProject();
-        Optional<VirtualFile> found = FileBasedIndexSafe.findFile(
-                project, resolved.definingClassFqcn(), resolved.originalName());
-        if (found.isEmpty() || found.get().equals(currentFile.getOriginalFile().getVirtualFile())) {
-            return null;
-        }
-        return PsiManager.getInstance(project).findFile(found.get());
-    }
-
-    private PhpDocTag findAliasTag(PsiFile definitionFile, PhpStanResolvedType resolved) {
-        for (PhpClass phpClass : PsiTreeUtil.findChildrenOfType(definitionFile, PhpClass.class)) {
-            if (!sameFqcn(phpClass.getFQN(), resolved.definingClassFqcn())) {
+    private PhpDocTag findAliasTagInAnotherFile(PsiFile currentFile, PhpStanResolvedType resolved) {
+        VirtualFile currentVirtualFile = currentFile.getOriginalFile().getVirtualFile();
+        String fqn = "\\" + stripLeadingSeparator(resolved.definingClassFqcn());
+        for (PhpClass phpClass : PhpIndex.getInstance(currentFile.getProject()).getClassesByFQN(fqn)) {
+            if (isInFile(phpClass, currentVirtualFile)) {
                 continue;
             }
             PhpDocComment doc = phpClass.getDocComment();
@@ -148,6 +138,12 @@ public final class PhpStanImportedArrayShapeProvider extends PhpDocArrayShapePro
             }
         }
         return null;
+    }
+
+    private boolean isInFile(PhpClass phpClass, VirtualFile file) {
+        PsiFile containingFile = phpClass.getContainingFile();
+        return containingFile != null && containingFile.getVirtualFile() != null
+                && containingFile.getVirtualFile().equals(file);
     }
 
     /**
@@ -202,14 +198,7 @@ public final class PhpStanImportedArrayShapeProvider extends PhpDocArrayShapePro
         return false;
     }
 
-    private boolean sameFqcn(String left, String right) {
-        if (left == null || right == null) {
-            return false;
-        }
-        return strip(left).equals(strip(right));
-    }
-
-    private String strip(String fqcn) {
+    private String stripLeadingSeparator(String fqcn) {
         return fqcn.startsWith("\\") ? fqcn.substring(1) : fqcn;
     }
 }

@@ -18,7 +18,7 @@ import dev.javakky.phpstantypedoc.model.SourceRange;
 import dev.javakky.phpstantypedoc.parser.DetectedTypeReference;
 import dev.javakky.phpstantypedoc.parser.PhpDocTypeReferenceDetector;
 import dev.javakky.phpstantypedoc.parser.PhpFileModel;
-import dev.javakky.phpstantypedoc.parser.PhpFileModelParser;
+import dev.javakky.phpstantypedoc.parser.PhpFileModelCache;
 import dev.javakky.phpstantypedoc.resolution.ClassNameResolver;
 import dev.javakky.phpstantypedoc.resolution.PhpStanTypeResolver;
 
@@ -27,7 +27,6 @@ import java.util.Optional;
 public final class PhpStanTypeResolverFacade {
     private static final Logger LOG = Logger.getInstance(PhpStanTypeResolverFacade.class);
 
-    private final PhpFileModelParser fileParser = new PhpFileModelParser();
     private final PhpDocTypeReferenceDetector referenceDetector = new PhpDocTypeReferenceDetector();
     private final PhpStanTypeResolver resolver = new PhpStanTypeResolver(new ClassNameResolver());
 
@@ -42,7 +41,7 @@ public final class PhpStanTypeResolverFacade {
             if (virtualFile == null) {
                 return Optional.empty();
             }
-            PhpFileModel fileModel = fileParser.parse(psiFile.getText());
+            PhpFileModel fileModel = PhpFileModelCache.of(psiFile);
             PsiElement offsetElement = psiFile.findElementAt(offset);
             PhpDocComment referenceDoc = PsiTreeUtil.getParentOfType(offsetElement, PhpDocComment.class, false);
             PhpClass containingClass = PsiTreeUtil.getParentOfType(referenceDoc, PhpClass.class, false);
@@ -99,7 +98,7 @@ public final class PhpStanTypeResolverFacade {
             // 元ファイルを辿る。ここで得た VirtualFile は「同じファイルを二重に読まない」ための
             // 目印にしか使わないので、null のままでも解決は続けられる。
             VirtualFile virtualFile = psiFile.getOriginalFile().getVirtualFile();
-            PhpFileModel fileModel = fileParser.parse(psiFile.getText());
+            PhpFileModel fileModel = PhpFileModelCache.of(psiFile);
             Optional<PhpFileModel.ClassLikeDocBlock> block = fileModel.findClass(stripLeadingSeparator(classFqcn));
             if (block.isEmpty()) {
                 return Optional.empty();
