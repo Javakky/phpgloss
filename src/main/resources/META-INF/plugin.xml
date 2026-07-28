@@ -12,6 +12,7 @@
     <extensions defaultExtensionNs="com.intellij">
         <fileBasedIndex implementation="dev.javakky.phpstantypedoc.index.PhpStanTypeAliasIndex"/>
         <gotoDeclarationHandler implementation="dev.javakky.phpstantypedoc.PhpStanTypeGotoDeclarationHandler"/>
+        <lang.inspectionSuppressor language="PHP" implementationClass="dev.javakky.phpstantypedoc.inspection.PhpStanTypeAliasInspectionSuppressor"/>
         <platform.backend.documentation.targetProvider implementation="dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider"/>
     </extensions>
 
@@ -19,4 +20,3 @@
         <arrayShapesProvider implementation="dev.javakky.phpstantypedoc.shape.PhpStanImportedArrayShapeProvider"/>
     </extensions>
 </idea-plugin>
-

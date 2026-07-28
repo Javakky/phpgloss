@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.9.0
+
+- Suppress the false "Argument type does not match the declared" warning when a PHPStan type alias resolves to an array shape and the native parameter type is `array`. Real mismatches, such as an array-shape alias on a `string` parameter, remain reported.
+
 ## 0.8.0
 
 - Link class names inside the type body. In `array{accounts: non-empty-list<Account>}` the `Account` now navigates to its class. Only capitalised identifiers are considered, so PHPStan's type keywords (all lowercase) are left alone; ambiguous names fall back to the one in the declaring class's namespace, and stay unlinked if still undecided.
@@ -36,4 +40,3 @@
 ## 0.1.0
 
 - Initial MVP for Quick Documentation and Go to Declaration on PHPStan type aliases in class-like PHPDoc.
-

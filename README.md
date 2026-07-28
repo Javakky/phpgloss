@@ -2,6 +2,8 @@
 
 PHPStan Type Documentation is an IntelliJ IDEA plugin that shows Quick Documentation for `@phpstan-type` and `@phpstan-import-type` aliases in PHPDoc, and navigates PHPDoc alias references to the actual type definition.
 
+It also teaches PhpStorm's PHPDoc signature inspection that an alias whose body is an array shape is compatible with a native `array` parameter declaration.
+
 It also fills a gap in PhpStorm's own array shape support. PhpStorm resolves an imported shape only when the `@phpstan-type` is declared in the same file, so key access on a shape imported from another file yields `mixed`. This plugin resolves that case, which restores key completion and key access types.
 
 Supported target:
