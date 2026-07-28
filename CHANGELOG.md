@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.10.0
+
+- Make links inside this plugin's Quick Documentation resolve to documentation targets. The links were rendered as `psi_element://` anchors, but the platform's built-in handler only accepts PSI-backed source targets and ignored this plugin's custom target.
+
 ## 0.9.0
 
 - Suppress the false "Argument type does not match the declared" warning when a PHPStan type alias resolves to an array shape and the native parameter type is `array`. Real mismatches, such as an array-shape alias on a `string` parameter, remain reported.

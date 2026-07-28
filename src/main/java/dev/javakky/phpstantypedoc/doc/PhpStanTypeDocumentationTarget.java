@@ -7,6 +7,7 @@ import com.intellij.platform.backend.documentation.DocumentationResult;
 import com.intellij.platform.backend.documentation.DocumentationTarget;
 import com.intellij.platform.backend.presentation.TargetPresentation;
 import com.intellij.pom.Navigatable;
+import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import dev.javakky.phpstantypedoc.PhpStanTypeResolverFacade;
 import dev.javakky.phpstantypedoc.ResolvedPhpStanTypeTarget;
@@ -60,5 +61,9 @@ public final class PhpStanTypeDocumentationTarget implements DocumentationTarget
         }
         return DocumentationResult.documentation(renderer.render(target.resolvedType(), linkifier));
     }
-}
 
+    PsiElement contextElement() {
+        PsiElement element = file.findElementAt(target.reference().range().startOffset());
+        return element == null ? file : element;
+    }
+}

@@ -1,6 +1,7 @@
 package dev.javakky.phpstantypedoc.doc;
 
 import com.intellij.testFramework.fixtures.BasePlatformTestCase;
+import com.intellij.platform.backend.documentation.DocumentationTarget;
 import com.jetbrains.php.lang.PhpFileType;
 
 /**
@@ -41,5 +42,37 @@ public final class TypeBodyClassLinkTest extends BasePlatformTestCase {
         // PHPStan の型キーワードはリンクにしない (すべて小文字なので候補にならない)
         assertFalse("型キーワードがリンクになっている: " + html,
                 html.contains("psi_element://\\App\\Domain\\non-empty-list"));
+    }
+
+    public void testResolvesClassLinkFromCustomDocumentationTarget() {
+        myFixture.addFileToProject("Account.php", """
+                <?php
+                namespace App\\Domain;
+
+                /** Account documentation. */
+                final class Account {}
+                """);
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, """
+                <?php
+                namespace App\\Domain;
+
+                /** @phpstan-type Payload array{account: Account} */
+                final class Holder
+                {
+                    /** @return Payload */
+                    public function get(): array
+                    {
+                        return [];
+                    }
+                }
+                """);
+        int offset = file.getText().lastIndexOf("Payload");
+        DocumentationTarget source = new PhpStanTypeDocumentationTargetProvider()
+                .documentationTargets(file, offset).getFirst();
+
+        var result = new PhpStanTypeDocumentationLinkHandler()
+                .resolveLink(source, "psi_element://\\App\\Domain\\Account");
+
+        assertNotNull("独自 documentation target から PSI link を解決できていない", result);
     }
 }
