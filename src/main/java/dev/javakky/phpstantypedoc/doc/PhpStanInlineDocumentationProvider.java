@@ -4,10 +4,11 @@ import com.intellij.openapi.util.TextRange;
 import com.intellij.platform.backend.documentation.DocumentationTarget;
 import com.intellij.platform.backend.documentation.InlineDocumentation;
 import com.intellij.platform.backend.documentation.InlineDocumentationProvider;
+import com.intellij.lang.LanguageDocumentation;
+import com.intellij.lang.documentation.DocumentationProvider;
 import com.intellij.psi.PsiDocCommentBase;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
-import com.jetbrains.php.lang.documentation.PhpDocumentationProvider;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
 import com.jetbrains.php.lang.psi.elements.Function;
 import com.jetbrains.php.lang.psi.elements.PhpClass;
@@ -34,7 +35,6 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
             com.intellij.openapi.diagnostic.Logger.getInstance(PhpStanInlineDocumentationProvider.class);
 
     private final PhpStanTypeResolverFacade resolver = new PhpStanTypeResolverFacade();
-    private final PhpDocumentationProvider provider = new PhpDocumentationProvider();
 
     @Override
     public @NotNull Collection<InlineDocumentation> inlineDocumentationItems(PsiFile file) {
@@ -69,6 +69,11 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
         // 要素の種類で変わるため、PSI を自分で辿らない。
         var owner = comment.getOwner();
         if (owner instanceof PhpClass phpClass) {
+            // エイリアスを持たないクラスは PHP 標準の表示に任せる。加工する内容が無いのに
+            // 描画を引き受けると、他プラグインが PHP のドキュメントへ足した内容まで落ちる
+            if (!PhpDocAliasLinker.hasAliases(phpClass)) {
+                return Optional.empty();
+            }
             return Optional.of(new AnnotatedInlineDocumentation(
                     comment, phpClass, html -> PhpDocAliasLinker.linkAliasNames(phpClass, html, resolver, true)));
         }
@@ -107,7 +112,7 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
 
         @Override
         public @Nullable String renderText() {
-            String html = provider.generateRenderedDoc(comment);
+            String html = baseHtml();
             String result = html == null ? null : annotate.apply(html);
             // 罫線モードの描画結果は MCP から取得できない。実機で何が出ているかを追うため記録する。
             LOG.warn("PHPStan rendered doc: owner=" + owner.getName()
@@ -116,6 +121,19 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
                     + " psiLinks=" + countOccurrences(result, "psi_element://")
                     + " html=" + (result == null ? "null" : result));
             return result;
+        }
+
+        /**
+         * 加工の土台になる HTML を、この言語に登録された documentation provider から取る。
+         *
+         * <p>PHP の provider を直接 new すると、他プラグインが {@code lang.documentationProvider} で
+         * PHP のドキュメントに足した内容が落ちる。platform の互換実装は同じことを
+         * {@code DocumentationManager#getProviderFromElement} でやっているが、そちらは削除予定。
+         */
+        private @Nullable String baseHtml() {
+            DocumentationProvider provider =
+                    LanguageDocumentation.INSTANCE.forLanguage(comment.getLanguage());
+            return provider == null ? null : provider.generateRenderedDoc(comment);
         }
 
         private int countOccurrences(String text, String needle) {

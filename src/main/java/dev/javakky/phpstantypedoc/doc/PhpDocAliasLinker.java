@@ -50,6 +50,22 @@ final class PhpDocAliasLinker {
     }
 
     /**
+     * @return このクラスにリンク対象の型エイリアスが一つでもあるか。
+     *         無いクラスの PHPDoc まで描画を引き受けると、PHP 標準の表示を無意味に置き換えることになる
+     */
+    static boolean hasAliases(PhpClass phpClass) {
+        PsiFile file = phpClass.getContainingFile();
+        if (file == null || phpClass.getFQN() == null) {
+            return false;
+        }
+        String classFqn = phpClass.getFQN().startsWith("\\")
+                ? phpClass.getFQN().substring(1) : phpClass.getFQN();
+        return PhpFileModelCache.of(file).findClass(classFqn)
+                .filter(block -> !block.aliases().isEmpty() || !block.imports().isEmpty())
+                .isPresent();
+    }
+
+    /**
      * @return エイリアス名 → リンク URL。import は別名と元名の両方を対象にし、
      *         元名は定義元クラスを owner にしたリンクへ向ける
      */

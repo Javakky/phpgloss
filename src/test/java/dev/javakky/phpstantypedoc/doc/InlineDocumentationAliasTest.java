@@ -75,6 +75,47 @@ public final class InlineDocumentationAliasTest extends BasePlatformTestCase {
                 new PhpStanInlineDocumentationProvider().findInlineDocumentation(file, comment.getTextRange()));
     }
 
+    /**
+     * クラスの PHPDoc も、エイリアスを持たないなら PHP 標準の表示に任せる。加工する内容が無いのに
+     * 描画を引き受けると、他プラグインが PHP のドキュメントへ足した内容まで落ちるため。
+     */
+    public void testLeavesClassDocsWithoutAliasesToThePlatform() {
+        String source = """
+                <?php
+                namespace App;
+
+                /**
+                 * ただの説明文。
+                 */
+                final class Plain {}
+                """;
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, source);
+        var comment = PsiTreeUtil.findChildrenOfType(file, PhpDocComment.class).iterator().next();
+
+        assertNull("エイリアスが無いクラスの PHPDoc まで奪っている",
+                new PhpStanInlineDocumentationProvider().findInlineDocumentation(file, comment.getTextRange()));
+    }
+
+    public void testKeepsClassDocsWithAliases() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
+        PhpDocComment classComment = null;
+        for (PhpDocComment comment : PsiTreeUtil.findChildrenOfType(file, PhpDocComment.class)) {
+            if (comment.getText().contains("@phpstan-import-type")) {
+                classComment = comment;
+            }
+        }
+        assertNotNull("クラスの PHPDoc が見つからない", classComment);
+
+        var documentation = new PhpStanInlineDocumentationProvider()
+                .findInlineDocumentation(file, classComment.getTextRange());
+
+        assertNotNull("エイリアスを持つクラスの documentation が返らない", documentation);
+        String html = documentation.renderText();
+        assertNotNull("レンダリング結果が null", html);
+        assertTrue("import-type のエイリアス名がリンクになっていない: " + html,
+                html.contains(">CreateUserData</a>"));
+    }
+
     private PhpDocComment methodDocComment(com.intellij.psi.PsiFile file) {
         PhpDocComment found = null;
         for (PhpDocComment comment : PsiTreeUtil.findChildrenOfType(file, PhpDocComment.class)) {

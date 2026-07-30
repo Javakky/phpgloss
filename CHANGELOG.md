@@ -11,6 +11,11 @@
 
 
 
+## 0.25.0
+
+- Leave a class's rendered comment alone when the class declares no type aliases. Since 0.20 every class comment was taken over, which now matters because 0.24 made this plugin's rendering win.
+- Take the base HTML from the language's registered documentation provider rather than constructing PHP's directly, so anything another plugin adds to PHP's documentation survives.
+
 ## 0.24.0
 
 - Show alias names in the rendered comment, which had never worked there. The rendered view collects every provider's items into a map keyed by text range, so the last provider registered wins the displayed HTML, while link clicks come from the first provider that answers. Registering at only one end left the HTML coming from PHP and the links from here.
