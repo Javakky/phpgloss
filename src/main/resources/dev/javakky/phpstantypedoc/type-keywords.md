@@ -39,6 +39,14 @@ tools: psalm, phpstan
 tools: phpstan
 0 以外の整数。`int<min, -1>|int<1, max>` と同じ。
 
+## min
+tools: psalm, phpstan
+`int<min, 0>` のように整数範囲の下限に書く。`PHP_INT_MIN` を指す。単独の型名としては使えない。
+
+## max
+tools: psalm, phpstan
+`int<1, max>` のように整数範囲の上限に書く。`PHP_INT_MAX` を指す。単独の型名としては使えない。
+
 ## literal-int
 tools: psalm
 コード中に整数リテラルとして書かれた値だけ。外部入力を `(int)` で変換した値は含まない。

@@ -37,6 +37,7 @@ public final class PhpStanKeywordDefinition {
             new Source("\\Psalm\\Type\\Atomic", "case '%s':", "psalm-Atomic.php"),
             new Source("\\PHPStan\\PhpDoc\\TypeNodeResolver", "case '%s':", "phpstan-TypeNodeResolver.php"),
             new Source("\\Psalm\\Type\\Atomic\\TPropertiesOf", "'%s'", "psalm-TPropertiesOf.php"),
+            new Source("\\Psalm\\Type\\Atomic\\TIntRange", "'%s'", "psalm-TIntRange.php"),
             new Source("\\Psalm\\Internal\\Type\\TypeParser", "'%s'", "psalm-TypeParser.php"),
             new Source("\\Psalm\\Internal\\Type\\TypeTokenizer", "'%s' => true", "psalm-TypeTokenizer.php")
     );

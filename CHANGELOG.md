@@ -11,6 +11,10 @@
 
 
 
+## 0.31.0
+
+- Explain `min` and `max`. Neither appears in the reserved-word tables: they are bounds inside `int<1, max>`, held as `TIntRange::BOUND_MIN` in Psalm and compared by name in PHPStan. Building the catalogue from the reserved tables alone missed them by construction.
+
 ## 0.30.0
 
 - Land on where a keyword's meaning is decided, not merely where the word is listed. Psalm's `PSALM_RESERVED_WORDS` is a tokeniser word table; `Atomic::create()` is what returns `TIntRange(1, null)` for `positive-int`. The chain is now Psalm `Atomic` → PHPStan `TypeNodeResolver` → Psalm `TPropertiesOf` → `TypeParser` → the word table, and a test names the three keywords that still reach only the table and why.
