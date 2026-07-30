@@ -63,13 +63,39 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
         String actual = normalize(argumentText);
         String expected = normalize(condition);
         if (!isClassConstant(actual) || !isClassConstant(expected)) {
-            return null;
+            return selectByShape(actual, expected);
         }
         if (actual.equals(expected)) {
             return whenTrue;
         }
         // 同じ enum の別ケースなら、条件は成り立たない
         return sameOwner(actual, expected) ? whenFalse : null;
+    }
+
+    /**
+     * 値の形による条件 (`$input is list<V>`) を、書かれた実引数から決める。
+     *
+     * <p>決められるのは配列リテラルが渡されている場合だけ。`[1, 2]` のようにキーを書いていなければ
+     * list、`['a' => 1]` のようにキーがあれば list ではない。変数が渡された場合は何も返さない。
+     */
+    private @Nullable String selectByShape(String argumentText, String conditionType) {
+        String base = conditionType.contains("<")
+                ? conditionType.substring(0, conditionType.indexOf('<')).trim()
+                : conditionType;
+        if (!base.equals("list") && !base.equals("non-empty-list")) {
+            return null;
+        }
+        String literal = argumentText.trim();
+        if (!literal.startsWith("[") || !literal.endsWith("]")) {
+            return null;
+        }
+        boolean hasKeys = topLevelIndexOf(literal.substring(1, literal.length() - 1), '=', 0) >= 0
+                && literal.contains("=>");
+        boolean empty = literal.substring(1, literal.length() - 1).isBlank();
+        if (base.equals("non-empty-list") && empty) {
+            return whenFalse;
+        }
+        return hasKeys ? whenFalse : whenTrue;
     }
 
     private static boolean isClassConstant(String text) {

@@ -11,6 +11,12 @@
 
 
 
+## 0.39.0
+
+- Decide a condition written on the shape of a value (`$input is list<V>`) from the array literal at the call site: keys written means it is not a list. A variable leaves it undecided, and nothing is added.
+- Fill the key of `array<K, V>` with `array-key`, since the arguments carry no key type. Without it that whole branch was unusable. PhpStorm normalises `array<K, V>` to `V[]` regardless, so the key does not survive into the shown type.
+- Split a union in a declared parameter before unifying. `non-empty-list<V>|array<K, V>` was read as one type and bound nothing.
+
 ## 0.38.0
 
 - Resolve type variables on method calls too, taking them from the receiver's type argument as well as from the call's arguments. A conditional return type on a method is evaluated the same way.

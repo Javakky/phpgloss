@@ -37,6 +37,12 @@ final class TemplateUnification {
             return;
         }
         String trimmed = declared.trim();
+        List<String> alternatives = PhpType.splitTopLevelUnion(trimmed);
+        if (alternatives.size() > 1) {
+            // `non-empty-list<V>|array<K, V>` のような union。どの枝からでも型変数は決まりうる
+            alternatives.forEach(alternative -> unify(alternative, actual, templates, bindings));
+            return;
+        }
         if (templates.contains(trimmed)) {
             bindings.putIfAbsent(trimmed, join(actual));
             return;
@@ -45,10 +51,39 @@ final class TemplateUnification {
         if (element == null) {
             return;
         }
+        // `array<K, V>` のキー側。実引数からキーの型は取れないので、配列のキーになれる型で埋める。
+        // 埋めないと、キーを持つ分岐が丸ごと出せなくなる
+        String key = keyOf(trimmed);
+        if (key != null && templates.contains(key)) {
+            bindings.putIfAbsent(key, "array-key");
+        }
         PhpType actualElements = elementsOf(actual);
         if (!actualElements.isEmpty()) {
             unify(element, actualElements, templates, bindings);
         }
+    }
+
+    /**
+     * `array<K, V>` の `K`。型引数が 1 つしかない総称型には無い。
+     */
+    private static String keyOf(String declared) {
+        int angle = declared.indexOf('<');
+        if (angle < 0 || !declared.endsWith(">")) {
+            return null;
+        }
+        String arguments = declared.substring(angle + 1, declared.length() - 1);
+        int depth = 0;
+        for (int i = 0; i < arguments.length(); i++) {
+            char c = arguments.charAt(i);
+            if (c == '<' || c == '{') {
+                depth++;
+            } else if (c == '>' || c == '}') {
+                depth--;
+            } else if (c == ',' && depth == 0) {
+                return arguments.substring(0, i).trim();
+            }
+        }
+        return null;
     }
 
     static Map<String, String> empty() {
