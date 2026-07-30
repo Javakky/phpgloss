@@ -11,6 +11,11 @@
 
 
 
+## 0.26.0
+
+- Search for usages when Go to Declaration is pressed on a `@phpstan-type` name, matching what the IDE does for a class or method name. The name in PHPDoc has no PSI that counts as a declaration, so its text range is declared as a symbol instead. An imported alias resolves to the same symbol as the original, so either end lists the whole set.
+- Find the alias through the word index rather than a new index of references, which would force a full reindex. A name introduced by `@phpstan-import-type ... as X` is a different word, so `X` is added to the search as soon as the import is seen.
+
 ## 0.25.0
 
 - Leave a class's rendered comment alone when the class declares no type aliases. Since 0.20 every class comment was taken over, which now matters because 0.24 made this plugin's rendering win.

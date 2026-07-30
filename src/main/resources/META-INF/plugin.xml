@@ -13,6 +13,10 @@
         <fileBasedIndex implementation="dev.javakky.phpstantypedoc.index.PhpStanTypeAliasIndex"/>
         <gotoDeclarationHandler implementation="dev.javakky.phpstantypedoc.PhpStanTypeGotoDeclarationHandler"/>
         <lang.inspectionSuppressor language="PHP" implementationClass="dev.javakky.phpstantypedoc.inspection.PhpStanTypeAliasInspectionSuppressor"/>
+        <!-- 宣言名を Symbol の宣言として見せ、Ctrl+B を使用箇所検索へ切り替える -->
+        <psi.declarationProvider implementation="dev.javakky.phpstantypedoc.usages.PhpStanAliasDeclarationProvider"/>
+        <searcher forClass="com.intellij.find.usages.api.UsageSearchParameters"
+                  implementationClass="dev.javakky.phpstantypedoc.usages.PhpStanAliasUsageSearcher"/>
         <platform.backend.documentation.linkHandler implementation="dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationLinkHandler"/>
         <platform.backend.documentation.targetProvider implementation="dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider"/>
         <!-- リンクの行き先となるクラスの documentation に、そのクラスの型エイリアスを載せる -->

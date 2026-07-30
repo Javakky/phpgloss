@@ -5,6 +5,7 @@ import com.intellij.openapi.editor.Editor;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiManager;
+import dev.javakky.phpstantypedoc.usages.PhpStanAliasDeclarations;
 import org.jetbrains.annotations.Nullable;
 
 public final class PhpStanTypeGotoDeclarationHandler implements GotoDeclarationHandler {
@@ -16,6 +17,11 @@ public final class PhpStanTypeGotoDeclarationHandler implements GotoDeclarationH
             return null;
         }
         PsiFile sourceFile = sourceElement.getContainingFile();
+        // 宣言名の上では移動先を出さない。自分自身へ移動しても意味がなく、ここで何も返さないことで
+        // platform が使用箇所検索へ切り替える (Go to Declaration or Usages の標準挙動)
+        if (PhpStanAliasDeclarations.at(sourceFile, offset).isPresent()) {
+            return null;
+        }
         return resolver.resolveAt(sourceFile, offset)
                 .map(target -> {
                     if (target.resolvedType().definitionNavigationRange() == null || target.definitionFile() == null) {
