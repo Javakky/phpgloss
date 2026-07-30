@@ -67,7 +67,7 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
         var owner = comment.getOwner();
         if (owner instanceof PhpClass phpClass) {
             return Optional.of(new AnnotatedInlineDocumentation(
-                    comment, phpClass, html -> PhpDocAliasLinker.linkAliasNames(phpClass, html, resolver, false)));
+                    comment, phpClass, html -> PhpDocAliasLinker.linkAliasNames(phpClass, html, resolver, true)));
         }
         Function function = owner instanceof Function ownerFunction ? ownerFunction : null;
         if (function == null || function.isClosure()) {
@@ -108,12 +108,21 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
             return html == null ? null : annotate.apply(html);
         }
 
+        /**
+         * レンダリング表示のリンクは、ここで返した target を起点に解決される
+         * ({@code DocRenderDefaultLinkActivationHandler})。null を返すとリンクが解決先を
+         * 持たず外部ブラウザに回され、「不正な形式の URL です」になる。
+         */
         @Override
         public @Nullable DocumentationTarget getOwnerTarget() {
             if (owner instanceof Function function) {
                 return PhpFunctionDocumentationTarget
                         .at(function.getContainingFile(), function.getTextOffset(), resolver)
                         .orElse(null);
+            }
+            if (owner instanceof PhpClass phpClass) {
+                return new PhpStanClassDocumentationTargetProvider()
+                        .documentationTarget(phpClass, phpClass);
             }
             return null;
         }

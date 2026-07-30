@@ -10,9 +10,13 @@
 
 
 
+## 0.22.0
+
+- Fix "malformed URL" when clicking a link in the rendered comment. Links there are resolved starting from the target returned by `getOwnerTarget()`, which was null for a class, so clicks fell through to the external browser. Returning the class target routes them through the link handler, and alias names in the rendered comment now navigate to the alias itself.
+
 ## 0.21.0
 
-- Point alias names in the rendered comment at the declaring class instead of at the alias. The rendered comment in the editor dispatches links through a different path than Quick Documentation and rejects the `Owner::Alias` form with "malformed URL", so only real PSI elements can be reached there. Quick Documentation keeps linking to the alias itself.
+- Point alias names in the rendered comment at the declaring class, since the `Owner::Alias` form appeared to be rejected there. Superseded by 0.22.0, which found the real cause.
 
 ## 0.20.0
 
