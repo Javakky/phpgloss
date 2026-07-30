@@ -44,7 +44,23 @@ public final class ConditionalReturnTypeTest extends BasePlatformTestCase {
             {
                 $asList = shaped([new User()], Shape::AS_LIST);
                 $asAssoc = shaped([new User()], Shape::AS_KEYED);
-                $unknown = shaped([new User()]);
+                $byDefault = shaped([new User()]);
+                $unknown = shaped([new User()], $given);
+            }
+
+            function probeViaVariable(): void
+            {
+                $mode = Shape::AS_KEYED;
+                $viaVariable = shaped([new User()], $mode);
+            }
+
+            function probeViaBranch(bool $flag): void
+            {
+                $mode = Shape::AS_LIST;
+                if ($flag) {
+                    $mode = Shape::AS_KEYED;
+                }
+                $viaBranch = shaped([new User()], $mode);
             }
             """;
 
@@ -74,13 +90,41 @@ public final class ConditionalReturnTypeTest extends BasePlatformTestCase {
     }
 
     /**
-     * 実引数が省略されて判定材料が無いときは何も足さない。誤った分岐を出すより黙る。
+     * 実引数が書かれていなくても、宣言に既定値があれば判定材料になる。`Shape::AUTO` は
+     * LIST とも ASSOC とも別のケースなので、入れ子の一番内側まで畳める。
      */
-    public void testAddsNothingWhenTheArgumentIsAbsent() {
+    public void testUsesTheDeclaredDefaultWhenTheArgumentIsAbsent() {
+        assertBranch("byDefault", "non-empty-list<\\Probe\\User>");
+    }
+
+    /**
+     * 変数に enum ケースを代入して渡した場合は、その代入を 1 段だけ辿って判定する。
+     */
+    public void testFollowsAnEnumCaseAssignedToAVariable() {
+        var parts = typeOf("viaVariable");
+
+        assertTrue("代入された enum ケースで判定できていない: " + parts,
+                parts.stream().anyMatch(t -> t.startsWith("list<\\Probe\\User")));
+    }
+
+    /**
+     * 分岐の中で代入し直される変数は、呼び出し時点の値が決まらない。何も足さない。
+     */
+    public void testAddsNothingWhenTheVariableIsAssignedTwice() {
+        var parts = typeOf("viaBranch");
+
+        assertFalse("値が決まらないのに分岐を選んでいる: " + parts,
+                parts.stream().anyMatch(t -> t.startsWith("non-empty-list<") || t.startsWith("list<")));
+    }
+
+    /**
+     * 判定材料が無いときは何も足さない。誤った分岐を出すより黙る。
+     */
+    public void testAddsNothingForAnUnknownVariable() {
         var parts = typeOf("unknown");
 
         assertFalse("判定材料が無いのに分岐を選んでいる: " + parts,
-                parts.stream().anyMatch(t -> t.startsWith("non-empty-list<")));
+                parts.stream().anyMatch(t -> t.startsWith("non-empty-list<") || t.startsWith("list<")));
     }
 
     private void assertBranch(String variableName, String expectedPrefix) {

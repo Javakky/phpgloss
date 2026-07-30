@@ -11,6 +11,18 @@
 
 
 
+## 0.43.0
+
+- Fill an argument that is not written at the call site with the parameter's declared default. `init($input)` decides its condition on `Shape::AUTO`, which is neither of the two named cases, so the nested conditional folds all three levels down to the shape of the array literal.
+- Decide a condition written on the shape of a value from the argument's type when no literal is written. A `list<...>` is a list; an `array<...>` whose key is a string is not. Anything else stays undecided.
+- Decide a condition written on a type (`positive-int`, `string`, …) from a numeric or string literal. Non-literals stay undecided.
+- Take the key of `array<K, V>` from the argument's own type argument instead of widening it to `array-key`. Carrying the type through as a string dropped the type arguments, which is why the key was unreachable in the first place.
+- Fill a type variable the arguments do not determine with the bound written after `of`, rather than assuming `array-key`. A type variable without a bound is left alone and nothing is inferred, as before.
+- Follow one assignment when an enum case is passed through a variable. Several assignments, or an assignment inside a branch, leave the value undecided.
+- Compare enum cases by fully qualified name, resolved against the file each side is written in. Two enums with the same short name in different namespaces are no longer treated as the same one; when either side cannot be resolved, nothing is claimed.
+- Match a resolved function by fully qualified name so that `\A\filter` and `\B\filter` are not mixed, preferring the caller's namespace and falling back to the global one.
+- Substitute the internally encoded type variables through PhpStorm's own mapping API when the return type is only written as `@psalm-return`, which is not read as text.
+
 ## 0.42.0
 
 - Fold a conditional `@phpstan-param` against the same arguments before matching it, rather than falling back to the plain `@param`. A condition states which type is accepted, not the shape that determines the type variable, so reading it as-is bound nothing. Folding it first also works when only the conditional parameter is written.

@@ -13,6 +13,7 @@ import com.jetbrains.php.lang.psi.elements.PhpNamedElement;
 import com.jetbrains.php.lang.psi.elements.PhpTypedElement;
 import com.jetbrains.php.lang.psi.resolve.types.PhpType;
 import com.jetbrains.php.lang.psi.resolve.types.PhpTypeProvider4;
+import com.jetbrains.php.lang.psi.resolve.types.generics.PhpGenericsBaseExtendedWithGenericTypeProvider;
 import dev.javakky.phpstantypedoc.parser.PhpDocDeclaredTypeReader;
 import org.jetbrains.annotations.Nullable;
 
@@ -38,6 +39,8 @@ public final class PhpStanInvokeTypeProvider implements PhpTypeProvider4 {
     private static final char FROM_CALL = 'ᨥ';
     /** 型は `|` で区切られるため、符号化した中身の `|` は別の文字へ退避する。 */
     private static final char UNION_ESCAPE = 'ᨢ';
+    /** PhpStorm が型変数を符号化するときの印 (`#ᢐV.`)。 */
+    private static final String TEMPLATE_MARKER = "#ᢐ";
 
     private static final String INVOKE = "__invoke";
 
@@ -139,31 +142,75 @@ public final class PhpStanInvokeTypeProvider implements PhpTypeProvider4 {
         String classFqn = typeString.substring(0, angle);
         for (PhpClass phpClass : PhpIndex.getInstance(project).getClassesByFQN(classFqn)) {
             Method invoke = phpClass.findMethodByName(INVOKE);
-            if (invoke == null) {
+            Map<String, String> bindings = invoke == null
+                    ? Map.of()
+                    : GenericTypeArguments.of(phpClass, typeString);
+            if (bindings.isEmpty()) {
                 continue;
             }
-            Map<String, String> bindings = GenericTypeArguments.of(phpClass, typeString);
-            PhpDocComment doc = invoke.getDocComment();
-            if (bindings.isEmpty() || doc == null) {
-                continue;
+            PhpType resolved = fromDocText(invoke, bindings);
+            if (resolved == null) {
+                resolved = fromEncodedType(invoke, bindings);
             }
-            String declared = PhpDocDeclaredTypeReader.typeNameFor(
-                    doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
-            if (declared == null) {
-                continue;
-            }
-            String substituted = TemplateSubstitution.apply(declared, bindings);
-            if (!TemplateSubstitution.hasUnresolved(substituted, bindings.keySet())) {
-                PhpType resolved = new PhpType().add(substituted);
-            String plural = TemplateSubstitution.pluralFormOf(substituted);
-            if (plural != null) {
-                // 要素アクセスが読める形も足す。総称の形は残すので精度は落ちない
-                resolved.add(plural);
-            }
-            return resolved;
+            if (resolved != null) {
+                return resolved;
             }
         }
         return null;
+    }
+
+    /**
+     * PHPDoc に書かれたテキストの型変数を差し替える。内部の置換 API は書かれたままの `V` に
+     * 効かないため、こちらは文字列で差し替える。
+     */
+    private @Nullable PhpType fromDocText(Method invoke, Map<String, String> bindings) {
+        PhpDocComment doc = invoke.getDocComment();
+        String declared = doc == null
+                ? null
+                : PhpDocDeclaredTypeReader.typeNameFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
+        if (declared == null) {
+            return null;
+        }
+        String substituted = TemplateSubstitution.apply(declared, bindings);
+        return TemplateSubstitution.hasUnresolved(substituted, bindings.keySet())
+                ? null
+                : withPluralForm(substituted);
+    }
+
+    /**
+     * 戻り値が `@psalm-return` だけで書かれている場合のように、PHPDoc のテキストからは読めない型。
+     *
+     * <p>PhpStorm 自身はそれを解釈していて、型変数をエンコード形 (`non-empty-list<#ᢐV.>`) で
+     * 持っている。この形は素の名前をキーにしたマッピングで内部の置換 API が埋められる (実測)。
+     */
+    private @Nullable PhpType fromEncodedType(Method invoke, Map<String, String> bindings) {
+        PhpType declared = invoke.getType();
+        if (!hasEncodedTemplate(declared)) {
+            return null;
+        }
+        PhpType substituted = PhpGenericsBaseExtendedWithGenericTypeProvider
+                .substituteTypesWithMapping(declared, bindings, 0);
+        // 埋まらなかった型変数を含む型は出さない。読み手に意味がないため
+        return substituted == null || substituted.isEmpty() || hasEncodedTemplate(substituted)
+                ? null
+                : substituted;
+    }
+
+    private static boolean hasEncodedTemplate(PhpType type) {
+        return type.getTypesWithParametrisedParts().stream()
+                .anyMatch(part -> part.contains(TEMPLATE_MARKER));
+    }
+
+    /**
+     * 要素アクセスが読める形も足す。総称の形は残すので精度は落ちない。
+     */
+    private static PhpType withPluralForm(String type) {
+        PhpType resolved = new PhpType().add(type);
+        String plural = TemplateSubstitution.pluralFormOf(type);
+        if (plural != null) {
+            resolved.add(plural);
+        }
+        return resolved;
     }
 
     /**

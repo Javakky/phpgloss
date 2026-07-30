@@ -33,12 +33,27 @@ public final class InvokeGenericTypeTest extends BasePlatformTestCase {
              */
             function opOf(array $input): Op { return new Op(); }
 
+            /** @template V */
+            final class PsalmOp
+            {
+                /** @psalm-return non-empty-list<V> */
+                public function __invoke(): array { return []; }
+            }
+
+            /**
+             * @template V
+             * @param non-empty-list<V> $input
+             * @return PsalmOp<V>
+             */
+            function psalmOpOf(array $input): PsalmOp { return new PsalmOp(); }
+
             function probe(): void
             {
                 $op = opOf([new User()]);
                 $direct = $op();
                 $chained = opOf([new User()])();
                 $element = $chained[0];
+                $psalm = psalmOpOf([new User()])();
             }
             """;
 
@@ -48,6 +63,26 @@ public final class InvokeGenericTypeTest extends BasePlatformTestCase {
 
     public void testPropagatesThroughAChainedCall() {
         assertResolves("chained");
+    }
+
+    /**
+     * 戻り値が `@psalm-return` だけで書かれている場合。PHPDoc のテキストからは読まないが、
+     * PhpStorm 自身はエンコード形の型変数として持っている。内部の置換 API で埋める。
+     *
+     * <p>この経路では `non-empty-list` である構造は PhpStorm 側の正規化で失われる。取り戻せる
+     * のは要素型まで。
+     */
+    public void testPropagatesThroughAPsalmAnnotatedInvoke() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
+        Variable variable = PsiTreeUtil.findChildrenOfType(file, Variable.class).stream()
+                .filter(v -> "psalm".equals(v.getName()))
+                .findFirst().orElseThrow();
+
+        var parts = ((PhpTypedElement) variable).getType().global(getProject())
+                .getTypesWithParametrisedParts();
+
+        assertTrue("要素型が伝わっていない: " + parts,
+                parts.stream().anyMatch(t -> t.contains("\\Probe\\User")));
     }
 
     /**

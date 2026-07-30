@@ -1,6 +1,11 @@
 package dev.javakky.phpstantypedoc.type;
 
+import com.jetbrains.php.lang.psi.resolve.types.PhpType;
 import org.jetbrains.annotations.Nullable;
+
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
 
 
 /**
@@ -11,6 +16,36 @@ import org.jetbrains.annotations.Nullable;
  * 両分岐の union が返る。
  */
 record ConditionalReturnType(String subject, String condition, String whenTrue, String whenFalse) {
+
+    /** 要素が並ぶだけの型。キーの型を持たない。 */
+    private static final Set<String> LIST_TYPES = Set.of("list", "non-empty-list");
+    /** キーと値の 2 つの型引数を持てる型。 */
+    private static final Set<String> KEYED_TYPES = Set.of("array", "non-empty-array", "iterable");
+    /** リテラルで判定できる型キーワード。 */
+    private static final Set<String> LITERAL_TYPES = Set.of(
+            "int", "positive-int", "negative-int", "non-negative-int", "non-positive-int", "string");
+    /** キーがこの型なら、その配列は list ではない。 */
+    private static final Set<String> STRING_TYPES = Set.of(
+            "string", "non-empty-string", "class-string", "numeric-string", "literal-string",
+            "lowercase-string", "non-falsy-string");
+
+    /**
+     * 条件型を畳むのに要る、呼び出し側の情報。
+     */
+    interface CallSite {
+        /**
+         * @param parameterName 条件が見ている仮引数の名前 (`$` を除く)
+         * @return 呼び出しに書かれた実引数。書かれておらず既定値も無ければ null
+         */
+        @Nullable ConditionalArgument argumentOf(String parameterName);
+
+        /**
+         * 条件側に書かれたクラス定数を、宣言が書かれたファイルの namespace / use で完全修飾する。
+         *
+         * @return `\Probe\Shape::AS_LIST` の形。解決できないときは null
+         */
+        @Nullable String qualifyDeclared(String classConstant);
+    }
 
     /**
      * @param declared `@phpstan-return` に書かれた本文
@@ -50,52 +85,157 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
     /**
      * 実引数がどちらの分岐に当たるかを決める。
      *
-     * <p>決められるのは、条件と実引数がどちらもクラス定数 (enum ケース) で書かれている場合だけ。
-     * 値の形による条件 (`$input is list<V>`) は実引数の型からは決められないので何も返さない。
+     * <p>enum ケース、リテラル、実引数の型の順に見る。どれでも決められないときは何も返さない。
+     * 誤った分岐を出すより黙る方がよい。
      *
-     * @param argumentText 呼び出しに書かれた実引数のテキスト
      * @return 選ばれた分岐。決められないときは null
      */
-    @Nullable String select(String argumentText) {
-        if (argumentText == null || argumentText.isBlank()) {
+    @Nullable String select(@Nullable ConditionalArgument argument, CallSite callSite) {
+        if (argument == null || argument.text() == null || argument.text().isBlank()) {
             return null;
         }
-        String actual = normalize(argumentText);
-        String expected = normalize(condition);
-        if (!isClassConstant(actual) || !isClassConstant(expected)) {
-            return selectByShape(actual, expected);
+        String actual = argument.text().trim();
+        String expected = condition.trim();
+        if (isClassConstant(actual) && isClassConstant(expected)) {
+            return selectByEnumCase(actual, callSite.qualifyDeclared(expected));
+        }
+        String byLiteral = selectByLiteral(actual, expected);
+        return byLiteral != null ? byLiteral : selectByActualType(expected, argument.type().get());
+    }
+
+    /**
+     * enum ケースどうしの比較。
+     *
+     * <p>短い名前のままでは別 namespace の同名 enum と見分けが付かないため、両方が完全修飾
+     * できたときだけ判定する。
+     */
+    private @Nullable String selectByEnumCase(String actual, @Nullable String expected) {
+        if (expected == null || !isQualified(actual) || !isQualified(expected)) {
+            return null;
         }
         if (actual.equals(expected)) {
             return whenTrue;
         }
         // 同じ enum の別ケースなら、条件は成り立たない
-        return sameOwner(actual, expected) ? whenFalse : null;
+        return ownerOf(actual).equals(ownerOf(expected)) ? whenFalse : null;
     }
 
     /**
-     * 値の形による条件 (`$input is list<V>`) を、書かれた実引数から決める。
-     *
-     * <p>決められるのは配列リテラルが渡されている場合だけ。`[1, 2]` のようにキーを書いていなければ
-     * list、`['a' => 1]` のようにキーがあれば list ではない。変数が渡された場合は何も返さない。
+     * 書かれた実引数そのもので決める。配列リテラルなら list かどうか、数値・文字列リテラルなら
+     * その型キーワードに当たるかを見る。
      */
-    private @Nullable String selectByShape(String argumentText, String conditionType) {
-        String base = conditionType.contains("<")
-                ? conditionType.substring(0, conditionType.indexOf('<')).trim()
-                : conditionType;
-        if (!base.equals("list") && !base.equals("non-empty-list")) {
-            return null;
+    private @Nullable String selectByLiteral(String argumentText, String conditionType) {
+        String base = baseOf(conditionType);
+        if (LIST_TYPES.contains(base)) {
+            return selectByArrayLiteral(argumentText, base);
         }
+        return LITERAL_TYPES.contains(base) ? selectByScalarLiteral(argumentText, base) : null;
+    }
+
+    /**
+     * 値の形による条件 (`$input is list<V>`) を、書かれた配列リテラルから決める。
+     *
+     * <p>`[1, 2]` のようにキーを書いていなければ list、`['a' => 1]` のようにキーがあれば list ではない。
+     */
+    private @Nullable String selectByArrayLiteral(String argumentText, String conditionBase) {
         String literal = argumentText.trim();
         if (!literal.startsWith("[") || !literal.endsWith("]")) {
             return null;
         }
-        boolean hasKeys = topLevelIndexOf(literal.substring(1, literal.length() - 1), '=', 0) >= 0
-                && literal.contains("=>");
-        boolean empty = literal.substring(1, literal.length() - 1).isBlank();
-        if (base.equals("non-empty-list") && empty) {
+        String elements = literal.substring(1, literal.length() - 1);
+        if (conditionBase.equals("non-empty-list") && elements.isBlank()) {
             return whenFalse;
         }
+        boolean hasKeys = topLevelIndexOf(elements, '=', 0) >= 0 && literal.contains("=>");
         return hasKeys ? whenFalse : whenTrue;
+    }
+
+    /**
+     * 型による条件 (`$size is positive-int`) を、書かれた数値・文字列リテラルから決める。
+     */
+    private @Nullable String selectByScalarLiteral(String argumentText, String conditionType) {
+        if (isStringLiteral(argumentText)) {
+            return conditionType.equals("string") ? whenTrue : whenFalse;
+        }
+        Long value = integerValueOf(argumentText);
+        if (value == null) {
+            return null;
+        }
+        return matchesIntegerType(conditionType, value) ? whenTrue : whenFalse;
+    }
+
+    private static boolean matchesIntegerType(String conditionType, long value) {
+        return switch (conditionType) {
+            case "int" -> true;
+            case "positive-int" -> value > 0;
+            case "negative-int" -> value < 0;
+            case "non-negative-int" -> value >= 0;
+            case "non-positive-int" -> value <= 0;
+            default -> false;
+        };
+    }
+
+    /**
+     * 書かれた実引数で決まらないときに、実引数の型で決める。
+     *
+     * <p>`list<...>` なら list、キーが文字列の `array<...>` なら list ではない。それ以外の型は、
+     * list かどうかを決めない (`array<int, ...>` は list とは限らない)。
+     */
+    private @Nullable String selectByActualType(String conditionType, @Nullable PhpType actual) {
+        if (!LIST_TYPES.contains(baseOf(conditionType)) || actual == null || actual.isEmpty()) {
+            return null;
+        }
+        Set<String> branches = new LinkedHashSet<>();
+        for (String typeString : actual.getTypesWithParametrisedParts()) {
+            String branch = branchOf(typeString);
+            if (branch != null) {
+                branches.add(branch);
+            }
+        }
+        // union の中で食い違うなら、どちらとも決められない
+        return branches.size() == 1 ? branches.iterator().next() : null;
+    }
+
+    private @Nullable String branchOf(String typeString) {
+        // 解決済みの型は `\array<...>` のように完全修飾されている
+        String base = unqualify(baseOf(typeString));
+        if (LIST_TYPES.contains(base)) {
+            return whenTrue;
+        }
+        if (!KEYED_TYPES.contains(base)) {
+            return null;
+        }
+        List<String> arguments = PhpType.getParametrizedParts(typeString);
+        return arguments.size() == 2 && STRING_TYPES.contains(unqualify(arguments.getFirst()))
+                ? whenFalse
+                : null;
+    }
+
+    private static String unqualify(String type) {
+        String trimmed = type.trim();
+        return trimmed.startsWith("\\") ? trimmed.substring(1) : trimmed;
+    }
+
+    /**
+     * `non-empty-list<V>` の `non-empty-list`。型引数を持たない型はそのまま。
+     */
+    private static String baseOf(String type) {
+        int angle = type.indexOf('<');
+        return (angle < 0 ? type : type.substring(0, angle)).trim();
+    }
+
+    private static boolean isStringLiteral(String text) {
+        return text.length() >= 2
+                && (text.charAt(0) == '\'' || text.charAt(0) == '"')
+                && text.charAt(text.length() - 1) == text.charAt(0);
+    }
+
+    private static @Nullable Long integerValueOf(String text) {
+        try {
+            return Long.valueOf(text.startsWith("+") ? text.substring(1) : text);
+        } catch (NumberFormatException notAnInteger) {
+            return null;
+        }
     }
 
     private static boolean isClassConstant(String text) {
@@ -103,19 +243,12 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
         return separator > 0 && separator + 2 < text.length();
     }
 
-    private static boolean sameOwner(String left, String right) {
-        return shortOwner(left).equals(shortOwner(right));
+    private static boolean isQualified(String classConstant) {
+        return classConstant.startsWith("\\");
     }
 
-    private static String shortOwner(String classConstant) {
-        String owner = classConstant.substring(0, classConstant.indexOf("::"));
-        int separator = owner.lastIndexOf('\\');
-        return separator < 0 ? owner : owner.substring(separator + 1);
-    }
-
-    private static String normalize(String text) {
-        String trimmed = text.trim();
-        return trimmed.startsWith("\\") ? trimmed.substring(1) : trimmed;
+    private static String ownerOf(String classConstant) {
+        return classConstant.substring(0, classConstant.indexOf("::"));
     }
 
     /**
@@ -159,17 +292,16 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
      * <p>実際のコードは 3 段まで重なる (the sample project の `filter` がそう)。1 段しか読まないと、
      * else 側に残った `($mode is ... )` という文字列をそのまま型として扱ってしまう。
      *
-     * @param argumentTextOf 引数名から、呼び出しに書かれたテキストを引く
      * @return 条件型でなくなった型。途中で決められなくなったら null
      */
-    static @Nullable String resolve(String declared, java.util.function.Function<String, String> argumentTextOf) {
+    static @Nullable String resolve(String declared, CallSite callSite) {
         String current = declared;
         for (int depth = 0; depth < MAX_DEPTH; depth++) {
             ConditionalReturnType conditional = parse(current);
             if (conditional == null) {
                 return looksConditional(current) ? null : current;
             }
-            String selected = conditional.select(argumentTextOf.apply(conditional.subject()));
+            String selected = conditional.select(callSite.argumentOf(conditional.subject()), callSite);
             if (selected == null) {
                 return null;
             }

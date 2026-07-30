@@ -57,6 +57,7 @@ public final class RealWorldConditionalTest extends BasePlatformTestCase {
             {
                 $asList = init([1, 2, 3], Shape::AS_LIST);
                 $asAssoc = init(['a' => 1], Shape::AS_KEYED);
+                $auto = init([1, 2, 3]);
             }
             """;
 
@@ -81,6 +82,18 @@ public final class RealWorldConditionalTest extends BasePlatformTestCase {
 
         assertTrue("条件型の @phpstan-param から型変数を決められていない: " + parts,
                 parts.stream().anyMatch(t -> t.startsWith("list<")));
+    }
+
+    /**
+     * `$mode` を書かずに呼ぶと、宣言の既定値 `Shape::AUTO` で条件が決まる。AUTO は LIST とも
+     * ASSOC とも別のケースなので外側 2 段は偽側へ抜け、3 段目の `$input is list<V>` が
+     * 配列リテラルで決まる。実物の `init` で一番よく書かれる呼び方がこれになる。
+     */
+    public void testFoldsThreeLevelsWhenTheModeIsOmitted() {
+        var parts = typeOf("auto");
+
+        assertTrue("3 段目まで畳めていない: " + parts,
+                parts.stream().anyMatch(t -> t.startsWith("list<") && t.contains("int")));
     }
 
     public void testDistinguishesTheTwoModes() {

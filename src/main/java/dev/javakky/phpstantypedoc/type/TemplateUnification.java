@@ -4,8 +4,10 @@ import com.jetbrains.php.lang.psi.resolve.types.PhpType;
 
 import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * 宣言された型と実引数の型を突き合わせて、型変数の中身を決める。
@@ -51,16 +53,35 @@ final class TemplateUnification {
         if (element == null) {
             return;
         }
-        // `array<K, V>` のキー側。実引数からキーの型は取れないので、配列のキーになれる型で埋める。
-        // 埋めないと、キーを持つ分岐が丸ごと出せなくなる
+        // `array<K, V>` のキー側。実引数の型がキーの型を持っていればそれを使う。
+        // 取れないときは埋めない (`@template K of array-key` の上界で埋まる)
         String key = keyOf(trimmed);
-        if (key != null && templates.contains(key)) {
-            bindings.putIfAbsent(key, "array-key");
+        String actualKey = key != null && templates.contains(key) ? keyTypeOf(actual) : null;
+        if (actualKey != null) {
+            bindings.putIfAbsent(key, actualKey);
         }
         PhpType actualElements = elementsOf(actual);
         if (!actualElements.isEmpty()) {
             unify(element, actualElements, templates, bindings);
         }
+    }
+
+    /**
+     * 実引数の型からキーの型を取り出す。`['a' => 1]` の global 型 `array<\string, \int>` の先頭。
+     *
+     * <p>候補が割れる union では決めない。誤ったキー型を出すより、上界で埋めた方がまだ正しい。
+     *
+     * @return キーの型。取れないときは null
+     */
+    private static String keyTypeOf(PhpType actual) {
+        Set<String> keys = new LinkedHashSet<>();
+        for (String typeString : actual.getTypesWithParametrisedParts()) {
+            List<String> arguments = PhpType.getParametrizedParts(typeString);
+            if (arguments.size() == 2) {
+                keys.add(arguments.getFirst());
+            }
+        }
+        return keys.size() == 1 ? keys.iterator().next() : null;
     }
 
     /**

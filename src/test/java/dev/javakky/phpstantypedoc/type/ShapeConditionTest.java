@@ -35,6 +35,31 @@ public final class ShapeConditionTest extends BasePlatformTestCase {
                 $fromMap = shaped(['a' => new User()]);
                 $fromVariable = shaped($given);
             }
+
+            /** @template V */
+            final class Box {}
+
+            /**
+             * 判定したい側を総称クラスにしてある。PhpStorm 自身はこの型引数を解かない
+             * (`Box<#V>` のまま) ので、解けていれば分岐を選べたことになる。
+             *
+             * @template K of array-key
+             * @template V
+             * @param non-empty-list<V>|array<K, V> $input
+             * @phpstan-return ($input is non-empty-list<V> ? non-empty-list<V> : Box<V>)
+             */
+            function boxedWhenKeyed(array $input): mixed
+            {
+                return $input;
+            }
+
+            function probeTyped(): void
+            {
+                $map = ['a' => new User()];
+                $fromTypedMap = boxedWhenKeyed($map);
+                $ints = [1, 2, 3];
+                $fromIntKeys = boxedWhenKeyed($ints);
+            }
             """;
 
     public void testPicksTheListBranchForAListLiteral() {
@@ -51,6 +76,27 @@ public final class ShapeConditionTest extends BasePlatformTestCase {
      */
     public void testPicksTheArrayBranchForAKeyedLiteral() {
         assertHas("fromMap", "\\Probe\\User[]");
+    }
+
+    /**
+     * キーが整数の `array<...>` は list とは限らない。型からは決めない。
+     */
+    public void testAddsNothingForAnIntegerKeyedType() {
+        var parts = typeOf("fromIntKeys");
+
+        assertFalse("list でないと決められないのに分岐を選んでいる: " + parts,
+                parts.stream().anyMatch(t -> t.startsWith("\\Probe\\Box<\\Probe")
+                        || t.startsWith("\\Probe\\Box<\\int")));
+    }
+
+    /**
+     * リテラルが書かれていなくても、実引数の型のキーが文字列なら list ではないと決まる。
+     */
+    public void testPicksTheOtherBranchForAStringKeyedType() {
+        var parts = typeOf("fromTypedMap");
+
+        assertTrue("型から list でない側を選べていない: " + parts,
+                parts.stream().anyMatch(t -> t.startsWith("\\Probe\\Box<\\Probe\\User")));
     }
 
     /**

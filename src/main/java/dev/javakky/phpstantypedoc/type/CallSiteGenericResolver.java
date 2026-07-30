@@ -2,6 +2,7 @@ package dev.javakky.phpstantypedoc.type;
 
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
 import com.jetbrains.php.PhpIndex;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
 import com.jetbrains.php.lang.psi.elements.Function;
@@ -60,9 +61,13 @@ final class CallSiteGenericResolver {
 
     /**
      * 呼び出しから、索引後に解決できる形の文字列を作る。ローカル情報しか使わない。
+     *
+     * <p>先頭には呼び出し元の namespace を置く。同じ短い名前の関数は namespace ごとに別物なので、
+     * 索引後に名前だけで引くと `\A\filter` と `\B\filter` が混ざる。
      */
     static String encode(FunctionReference reference) {
-        StringBuilder encoded = new StringBuilder();
+        StringBuilder encoded = new StringBuilder(namespaceOf(reference.getContainingFile()));
+        encoded.append(FIELD);
         if (reference instanceof MethodReference method
                 && method.getClassReference() instanceof PhpTypedElement receiver) {
             // レシーバの型は索引後でないと決まらないので、シグネチャのまま持ち回る
@@ -72,10 +77,10 @@ final class CallSiteGenericResolver {
         for (PsiElement argument : reference.getParameters()) {
             encoded.append(FIELD);
             if (argument instanceof PhpTypedElement typed) {
-                encoded.append(escapeSignature(typed.getType().toString()));
+                encoded.append(escapeSignature(signatureOf(typed)));
             }
             // 条件型は実引数の値 (`Shape::AS_LIST`) で分岐するため、型だけでは足りない
-            encoded.append(SUBFIELD).append(escapeSignature(argument.getText()));
+            encoded.append(SUBFIELD).append(escapeSignature(ArgumentText.of(argument)));
         }
         return encoded.toString();
     }
@@ -86,16 +91,18 @@ final class CallSiteGenericResolver {
      */
     static @Nullable PhpType decodeAndResolve(String encoded, Project project) {
         List<String> fields = split(encoded);
-        if (fields.isEmpty()) {
+        if (fields.size() < 2) {
             return null;
         }
-        if (encoded.charAt(0) == METHOD) {
-            return methodResultOf(project, fields);
+        String namespace = fields.getFirst();
+        List<String> call = fields.subList(1, fields.size());
+        if (!call.getFirst().isEmpty() && call.getFirst().charAt(0) == METHOD) {
+            return methodResultOf(project, call);
         }
-        String functionName = fields.getFirst();
-        List<Argument> arguments = fields.subList(1, fields.size()).stream().map(Argument::parse).toList();
+        String functionName = call.getFirst();
+        List<Argument> arguments = call.subList(1, call.size()).stream().map(Argument::parse).toList();
         PhpType result = new PhpType();
-        for (Function function : PhpIndex.getInstance(project).getFunctionsByName(functionName)) {
+        for (Function function : functionsNamed(project, functionName, namespace)) {
             PhpType resolved = returnTypeOf(project, function, arguments, Map.of());
             if (resolved != null) {
                 result.add(resolved);
@@ -112,19 +119,72 @@ final class CallSiteGenericResolver {
             return null;
         }
         Project project = reference.getProject();
-        List<Argument> arguments = new ArrayList<>();
-        for (PsiElement argument : reference.getParameters()) {
-            String signature = argument instanceof PhpTypedElement typed ? typed.getType().toString() : "";
-            arguments.add(new Argument(signature, argument.getText()));
-        }
+        List<Argument> arguments = argumentsOf(reference);
         PhpType result = new PhpType();
-        for (Function function : PhpIndex.getInstance(project).getFunctionsByName(reference.getName())) {
+        for (Function function : functionsNamed(
+                project, reference.getName(), namespaceOf(reference.getContainingFile()))) {
             PhpType resolved = returnTypeOf(project, function, arguments, Map.of());
             if (resolved != null) {
                 result.add(resolved);
             }
         }
         return result.isEmpty() ? null : result;
+    }
+
+    private static List<Argument> argumentsOf(FunctionReference reference) {
+        List<Argument> arguments = new ArrayList<>();
+        for (PsiElement argument : reference.getParameters()) {
+            String signature = argument instanceof PhpTypedElement typed ? signatureOf(typed) : "";
+            arguments.add(new Argument(signature, ArgumentText.of(argument)));
+        }
+        return arguments;
+    }
+
+    /**
+     * 実引数の型を文字列にする。
+     *
+     * <p>{@code PhpType#toString} は型引数を落とす (実測: `['a' => 1]` の型は
+     * `\array<\string, \int>` を持っているのに `#㈲\string|int[]|?` になる)。落とすとキーの型が
+     * 復元できないので、型引数を含む形で持ち回る。
+     */
+    private static String signatureOf(PhpTypedElement typed) {
+        return String.join("|", typed.getType().getTypesWithParametrisedParts());
+    }
+
+    private static String namespaceOf(@Nullable PsiFile file) {
+        if (file == null) {
+            return "";
+        }
+        String namespace = PhpFileModelCache.of(file).namespace();
+        return namespace == null ? "" : namespace;
+    }
+
+    /**
+     * 同じ短い名前の関数から、呼び出し元の namespace のものを選ぶ。無ければ global 側に落ちる
+     * (PHP の名前解決と同じ順序)。
+     *
+     * <p>どちらにも当たらないときは絞らない。`use function` で別の namespace から取り込んだ形は
+     * ここでは追えないため、絞ると今まで解けていたものまで解けなくなる。
+     */
+    private static Collection<Function> functionsNamed(Project project, String name, String namespace) {
+        Collection<Function> candidates = PhpIndex.getInstance(project).getFunctionsByName(name);
+        if (candidates.size() < 2) {
+            return candidates;
+        }
+        List<Function> local = withFqn(candidates, fqnOf(namespace, name));
+        if (!local.isEmpty()) {
+            return local;
+        }
+        List<Function> global = withFqn(candidates, fqnOf("", name));
+        return global.isEmpty() ? candidates : global;
+    }
+
+    private static List<Function> withFqn(Collection<Function> candidates, String fqn) {
+        return candidates.stream().filter(function -> fqn.equalsIgnoreCase(function.getFQN())).toList();
+    }
+
+    private static String fqnOf(String namespace, String name) {
+        return namespace.isBlank() ? "\\" + name : "\\" + namespace + "\\" + name;
     }
 
     /**
@@ -139,11 +199,7 @@ final class CallSiteGenericResolver {
         }
         Project project = reference.getProject();
         PhpType receiverType = receiver.getType().global(project);
-        List<Argument> arguments = new ArrayList<>();
-        for (PsiElement argument : reference.getParameters()) {
-            String signature = argument instanceof PhpTypedElement typed ? typed.getType().toString() : "";
-            arguments.add(new Argument(signature, argument.getText()));
-        }
+        List<Argument> arguments = argumentsOf(reference);
         PhpType result = new PhpType();
         for (String typeString : receiverType.getTypesWithParametrisedParts()) {
             int angle = typeString.indexOf('<');
@@ -212,7 +268,8 @@ final class CallSiteGenericResolver {
             return null;
         }
         Parameter[] parameters = function.getParameters();
-        String declaredReturn = returnExpressionOf(doc, parameters, arguments);
+        CallSite callSite = new CallSite(project, function, parameters, arguments);
+        String declaredReturn = returnExpressionOf(doc, callSite);
         if (declaredReturn == null || !declaredReturn.contains("<")) {
             // 型引数を持たない戻り値は PhpStorm が既に解いている
             return null;
@@ -220,13 +277,14 @@ final class CallSiteGenericResolver {
         Map<String, String> bindings = TemplateUnification.empty();
         bindings.putAll(seed);
         for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
-            String declared = declaredParamOf(doc, parameters, arguments, parameters[i].getName());
+            String declared = declaredParamOf(doc, callSite, parameters[i].getName());
             String signature = arguments.get(i).signature();
             if (declared == null || signature.isBlank()) {
                 continue;
             }
             TemplateUnification.unify(declared, actualTypeOf(project, signature), templates, bindings);
         }
+        fillFromBounds(doc, templates, bindings);
         if (bindings.isEmpty()) {
             return null;
         }
@@ -245,6 +303,23 @@ final class CallSiteGenericResolver {
     }
 
     /**
+     * 実引数から決められなかった型変数を、`@template K of array-key` の上界で埋める。
+     *
+     * <p>埋めないとその型変数を含む分岐が丸ごと出せない。上界が書かれていない型変数は埋めず、
+     * 従来どおり型を出さない。
+     */
+    private static void fillFromBounds(
+            PhpDocComment doc, Collection<String> templates, Map<String, String> bindings) {
+        Map<String, String> declared = GenericTypeArguments.templates(doc);
+        for (String template : templates) {
+            String bound = declared.get(template);
+            if (bound != null && !bound.isBlank()) {
+                bindings.putIfAbsent(template, bound);
+            }
+        }
+    }
+
+    /**
      * 引数の宣言を読む。
      *
      * <p>`@phpstan-param` にも条件型が書かれていることがある (実物の `init` がそう)。条件式は
@@ -253,13 +328,12 @@ final class CallSiteGenericResolver {
      */
     private static @Nullable String declaredParamOf(
             PhpDocComment doc,
-            Parameter[] parameters,
-            List<Argument> arguments,
+            CallSite callSite,
             String parameterName
     ) {
         String raw = rawParamOf(doc, parameterName);
         if (raw != null && ConditionalReturnType.parse(raw) != null) {
-            String folded = ConditionalReturnType.resolve(raw, subject -> argumentTextOf(subject, parameters, arguments));
+            String folded = ConditionalReturnType.resolve(raw, callSite);
             if (folded != null) {
                 return folded;
             }
@@ -293,29 +367,66 @@ final class CallSiteGenericResolver {
         return null;
     }
 
-    private static @Nullable String argumentTextOf(
-            String subject, Parameter[] parameters, List<Argument> arguments) {
-        for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
-            if (subject.equals(parameters[i].getName())) {
-                return arguments.get(i).text();
+    /**
+     * 条件型を畳むための呼び出し側の情報。
+     *
+     * @param parameters 呼び出し先の仮引数。書かれなかった実引数を既定値で埋めるのに使う
+     */
+    private record CallSite(
+            Project project,
+            Function function,
+            Parameter[] parameters,
+            List<Argument> arguments
+    ) implements ConditionalReturnType.CallSite {
+
+        @Override
+        public @Nullable ConditionalArgument argumentOf(String parameterName) {
+            for (int i = 0; i < parameters.length; i++) {
+                if (!parameterName.equals(parameters[i].getName())) {
+                    continue;
+                }
+                return i < arguments.size()
+                        ? conditionArgumentOf(arguments.get(i).signature(), arguments.get(i).text())
+                        : defaultArgumentOf(parameters[i]);
             }
+            return null;
         }
-        return null;
+
+        @Override
+        public @Nullable String qualifyDeclared(String classConstant) {
+            return ArgumentText.qualifyClassConstant(classConstant, function.getContainingFile());
+        }
+
+        /**
+         * 書かれなかった実引数は、宣言の既定値で埋める。`init($input)` の `$mode` は
+         * `Shape::AUTO` として条件に回る。
+         */
+        private @Nullable ConditionalArgument defaultArgumentOf(Parameter parameter) {
+            PsiElement value = parameter.getDefaultValue();
+            if (value == null) {
+                return null;
+            }
+            String signature = value instanceof PhpTypedElement typed ? signatureOf(typed) : "";
+            // 既定値は宣言側のファイルに書かれているので、修飾も宣言側の namespace で行われる
+            return conditionArgumentOf(signature, ArgumentText.of(value));
+        }
+
+        private ConditionalArgument conditionArgumentOf(String signature, String text) {
+            return signature.isBlank()
+                    ? ConditionalArgument.ofText(text)
+                    : new ConditionalArgument(text, () -> actualTypeOf(project, signature));
+        }
     }
 
     /**
      * 戻り値の宣言を読む。条件型なら実引数を見て分岐を選ぶ。
      */
-    private static @Nullable String returnExpressionOf(
-            PhpDocComment doc,
-            Parameter[] parameters,
-            List<Argument> arguments
-    ) {
+    private static @Nullable String returnExpressionOf(PhpDocComment doc, CallSite callSite) {
         String raw = rawReturnOf(doc);
         if (ConditionalReturnType.parse(raw) == null) {
             return PhpDocDeclaredTypeReader.typeNameFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
         }
-        return ConditionalReturnType.resolve(raw, subject -> argumentTextOf(subject, parameters, arguments));
+        return ConditionalReturnType.resolve(raw, callSite);
     }
 
     /**
