@@ -2,7 +2,6 @@ package dev.javakky.phpstantypedoc.type;
 
 import org.jetbrains.annotations.Nullable;
 
-import java.util.List;
 
 /**
  * `@phpstan-return ($mode is Shape::AS_LIST ? list<V> : array<K, V>)` の形を読む。
@@ -126,7 +125,37 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
         return -1;
     }
 
-    static List<String> branchesOf(ConditionalReturnType conditional) {
-        return List.of(conditional.whenTrue(), conditional.whenFalse());
+    private static final int MAX_DEPTH = 8;
+
+    /**
+     * 入れ子になった条件型を、決められなくなるまで畳む。
+     *
+     * <p>実際のコードは 3 段まで重なる (the sample project の `filter` がそう)。1 段しか読まないと、
+     * else 側に残った `($mode is ... )` という文字列をそのまま型として扱ってしまう。
+     *
+     * @param argumentTextOf 引数名から、呼び出しに書かれたテキストを引く
+     * @return 条件型でなくなった型。途中で決められなくなったら null
+     */
+    static @Nullable String resolve(String declared, java.util.function.Function<String, String> argumentTextOf) {
+        String current = declared;
+        for (int depth = 0; depth < MAX_DEPTH; depth++) {
+            ConditionalReturnType conditional = parse(current);
+            if (conditional == null) {
+                return looksConditional(current) ? null : current;
+            }
+            String selected = conditional.select(argumentTextOf.apply(conditional.subject()));
+            if (selected == null) {
+                return null;
+            }
+            current = selected;
+        }
+        return null;
+    }
+
+    /**
+     * 条件型として読めなかったのに条件型に見えるもの。型として出すと意味不明な型になる。
+     */
+    private static boolean looksConditional(String type) {
+        return type.trim().startsWith("(") && indexOfWord(type, "is") >= 0;
     }
 }

@@ -30,7 +30,10 @@ public final class ConditionalReturnTypeTest extends BasePlatformTestCase {
              * @template K of array-key
              * @template V
              * @param non-empty-list<V>|array<K, V> $input
-             * @phpstan-return ($mode is Shape::AS_LIST ? non-empty-list<V> : array<K, V>)
+             * @phpstan-return ($mode is Shape::AS_LIST ? non-empty-list<V> :
+             *   ($mode is Shape::AS_KEYED ? list<V> :
+             *     non-empty-list<V>
+             * ))
              */
             function shaped(array $input, Shape $mode = Shape::AUTO): array
             {
@@ -50,14 +53,24 @@ public final class ConditionalReturnTypeTest extends BasePlatformTestCase {
     }
 
     /**
-     * 別の enum ケースなら list 側は選ばれない。`array<K, V>` の `K` は実引数から決められないため、
-     * 分岐は選べても型としては出さない (誤った型を出すより黙る)。
+     * 別の enum ケースなら、入れ子の内側の分岐まで畳んで型を決める。
      */
-    public void testDoesNotPickTheListBranchForAnotherEnumCase() {
+    public void testPicksTheNestedBranchForAnotherEnumCase() {
         var parts = typeOf("asAssoc");
 
-        assertFalse("別のケースなのに list 側を選んでいる: " + parts,
-                parts.stream().anyMatch(t -> t.startsWith("non-empty-list<")));
+        assertTrue("入れ子の分岐が選ばれていない: " + parts,
+                parts.stream().anyMatch(t -> t.startsWith("list<\\Probe\\User")));
+    }
+
+    /**
+     * 実際のコードは条件型が入れ子になる。1 段しか読まないと、else 側に残った
+     * `($mode is ... )` という文字列をそのまま型として扱ってしまう。
+     */
+    public void testDoesNotEmitANestedConditionalAsAType() {
+        var parts = typeOf("asAssoc");
+
+        assertFalse("条件型の文字列を型として出している: " + parts,
+                parts.stream().anyMatch(t -> t.contains(" is ") || t.contains("Shape::")));
     }
 
     /**

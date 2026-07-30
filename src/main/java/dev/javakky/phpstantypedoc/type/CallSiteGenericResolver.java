@@ -125,16 +125,18 @@ final class CallSiteGenericResolver {
             Parameter[] parameters,
             List<Argument> arguments
     ) {
-        ConditionalReturnType conditional = ConditionalReturnType.parse(rawReturnOf(doc));
-        if (conditional == null) {
+        String raw = rawReturnOf(doc);
+        if (ConditionalReturnType.parse(raw) == null) {
             return PhpDocDeclaredTypeReader.typeNameFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
         }
-        for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
-            if (conditional.subject().equals(parameters[i].getName())) {
-                return conditional.select(arguments.get(i).text());
+        return ConditionalReturnType.resolve(raw, subject -> {
+            for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
+                if (subject.equals(parameters[i].getName())) {
+                    return arguments.get(i).text();
+                }
             }
-        }
-        return null;
+            return null;
+        });
     }
 
     /**
@@ -145,13 +147,37 @@ final class CallSiteGenericResolver {
         for (String tag : List.of("@phpstan-return", "@psalm-return")) {
             for (var element : doc.getTagElementsByName(tag)) {
                 String text = element.getText();
-                String body = text.substring(text.indexOf(tag) + tag.length()).trim();
+                String body = stripDocDecoration(text.substring(text.indexOf(tag) + tag.length()));
                 if (!body.isEmpty()) {
                     return body;
                 }
             }
         }
         return null;
+    }
+
+    /**
+     * 複数行にまたがる型から PHPDoc の飾り (行頭の `*`) を落として 1 行にする。
+     * 落とさないと、入れ子の条件型が `*   ($mode is ...` の形になり読めない。
+     */
+    private static String stripDocDecoration(String body) {
+        StringBuilder result = new StringBuilder();
+        for (String line : body.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("*")) {
+                trimmed = trimmed.substring(1).trim();
+            }
+            if (trimmed.endsWith("*/")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 2).trim();
+            }
+            if (!trimmed.isEmpty()) {
+                if (!result.isEmpty()) {
+                    result.append(' ');
+                }
+                result.append(trimmed);
+            }
+        }
+        return result.toString();
     }
 
     /**

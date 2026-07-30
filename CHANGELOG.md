@@ -11,6 +11,11 @@
 
 
 
+## 0.37.0
+
+- Fold nested conditional return types instead of reading only the outermost one. Real code nests them three deep, and stopping at the first level emitted the remaining `($mode is ... )` text as if it were a type.
+- Strip the PHPDoc line decoration before reading a type that spans several lines; the leading `*` made the nested condition unreadable.
+
 ## 0.36.0
 
 - Evaluate a conditional return type against the argument at the call site. `($mode is Shape::AS_LIST ? non-empty-list<V> : array<K, V>)` now picks a branch when the argument is an enum case; PhpStorm parses the syntax but never evaluates it, returning the union of both branches whatever is passed (YouTrack WI-85338 and WI-77577, both open).
