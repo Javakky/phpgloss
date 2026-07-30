@@ -11,6 +11,10 @@
 
 
 
+## 0.24.0
+
+- Show alias names in the rendered comment, which had never worked there. The rendered view collects every provider's items into a map keyed by text range, so the last provider registered wins the displayed HTML, while link clicks come from the first provider that answers. Registering at only one end left the HTML coming from PHP and the links from here.
+
 ## 0.23.0
 
 - Log the rendered comment HTML. The rendered view cannot be inspected through the IDE's MCP tools, so its actual output was being guessed at rather than observed.

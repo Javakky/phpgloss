@@ -17,8 +17,18 @@
         <platform.backend.documentation.targetProvider implementation="dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider"/>
         <!-- リンクの行き先となるクラスの documentation に、そのクラスの型エイリアスを載せる -->
         <platform.backend.documentation.psiTargetProvider order="first" implementation="dev.javakky.phpstantypedoc.doc.PhpStanClassDocumentationTargetProvider"/>
-        <!-- platform の互換実装より先に評価させる (order=first がないと PHP 標準の表示が採られる) -->
+        <!--
+            レンダリング表示は 2 つの経路が逆向きに勝敗を決めるため、同じ provider を両端に置く。
+
+            - `DocRenderPassFactory` は全 provider の項目を集めて `Map<TextRange, Item>` に put する。
+              同じ範囲なら後勝ちなので、表示される HTML を取るには最後に評価される必要がある
+            - `InlineDocumentationImplKt#findInlineDocumentation` は最初に非 null を返した provider で
+              打ち切る。リンククリック時の `getOwnerTarget()` はここから来るので、こちらは先頭が要る
+
+            片方だけだと、HTML は PHP 標準・リンクだけ自前という食い違った状態になる。
+        -->
         <platform.backend.documentation.inlineDocumentationProvider order="first" implementation="dev.javakky.phpstantypedoc.doc.PhpStanInlineDocumentationProvider"/>
+        <platform.backend.documentation.inlineDocumentationProvider order="last" implementation="dev.javakky.phpstantypedoc.doc.PhpStanInlineDocumentationProvider"/>
     </extensions>
 
     <extensions defaultExtensionNs="com.jetbrains.php">
