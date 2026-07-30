@@ -19,13 +19,29 @@ public final class PhpStanTypeDocumentationTarget implements DocumentationTarget
     private final ResolvedPhpStanTypeTarget target;
     private final PhpStanTypeHtmlRenderer renderer = new PhpStanTypeHtmlRenderer();
 
+    private final boolean restorable;
+
     PhpStanTypeDocumentationTarget(PsiFile file, ResolvedPhpStanTypeTarget target) {
+        this(file, target, true);
+    }
+
+    /**
+     * @param restorable 保存した範囲から {@code resolveAt} で復元できるか。キャレット起点の
+     *                   target は復元できるが、リンクから作った target は範囲が参照元の要素
+     *                   (メソッド全体など) を指すため復元できず、null pointer になって
+     *                   documentation が破棄される
+     */
+    PhpStanTypeDocumentationTarget(PsiFile file, ResolvedPhpStanTypeTarget target, boolean restorable) {
         this.file = file;
         this.target = target;
+        this.restorable = restorable;
     }
 
     @Override
     public @NotNull Pointer<? extends DocumentationTarget> createPointer() {
+        if (!restorable) {
+            return Pointer.hardPointer(this);
+        }
         TextRange range = new TextRange(target.reference().range().startOffset(), target.reference().range().endOffset());
         return Pointer.fileRangePointer(file, range, (restoredFile, restoredRange) ->
                 new PhpStanTypeResolverFacade().resolveAt(restoredFile, restoredRange.getStartOffset())

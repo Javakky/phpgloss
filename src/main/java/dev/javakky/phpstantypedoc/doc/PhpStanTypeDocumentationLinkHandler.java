@@ -122,7 +122,9 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
                 new DetectedTypeReference(reference.aliasName(), contextRange),
                 definitionFile(context, resolved.get())
         );
-        return LinkResolveResult.resolvedTarget(new PhpStanTypeDocumentationTarget(file, aliasTarget));
+        // リンク由来の target は範囲から復元できないので hard pointer で保持する
+        return LinkResolveResult.resolvedTarget(
+                new PhpStanTypeDocumentationTarget(file, aliasTarget, false));
     }
 
     private com.intellij.openapi.vfs.VirtualFile definitionFile(

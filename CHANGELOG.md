@@ -7,6 +7,11 @@
 
 
 
+
+## 0.19.0
+
+- Fix alias links opening nothing. The link handler resolved correctly, but the returned target was held through a pointer that restores itself by re-resolving a saved text range. For a link-created target that range points at the referring element (a whole method), where no alias resolves, so the pointer produced null and the documentation was discarded. Link-created targets are now held directly.
+
 ## 0.18.0
 
 - Carry the alias inside a `psi_element://` URL as `Owner::AliasName`. A custom scheme is rendered as a link but the documentation UI never dispatches the click, so the handler was never reached. A `#` fragment breaks the platform's PSI resolution. The `::` form keeps the known scheme while leaving the alias name recoverable.
