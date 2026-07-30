@@ -16,6 +16,21 @@ public final class PhpStanTypeHtmlRenderer {
         return render(variableName, resolvedType, linkifier);
     }
 
+    /**
+     * エイリアスを持たない変数の表示。PHP 標準の変数ホバーと同じ最小構成
+     * (`$result: list<int>` と定義元ファイル) にし、型だけを整理したものに差し替える。
+     */
+    public String renderVariableType(String variableName, String type, String sourceFileName) {
+        return DocumentationMarkup.DEFINITION_START
+                + "$" + escape(variableName) + ": " + escape(type)
+                + DocumentationMarkup.DEFINITION_END
+                + DocumentationMarkup.SECTIONS_START
+                + DocumentationMarkup.SECTION_HEADER_START + "Source:"
+                + DocumentationMarkup.SECTION_SEPARATOR + escape(sourceFileName)
+                + DocumentationMarkup.SECTION_END
+                + DocumentationMarkup.SECTIONS_END;
+    }
+
     public String render(PhpStanResolvedType resolvedType, PhpStanTypeBodyLinkifier linkifier) {
         return render(null, resolvedType, linkifier);
     }

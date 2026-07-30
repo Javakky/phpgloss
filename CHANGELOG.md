@@ -11,6 +11,13 @@
 
 
 
+## 0.44.0
+
+- Drop the abstract types a more precise one in the same union already covers when hovering a variable. A variable's type is the union of several signature parts, so `array` and the plural form stay beside a resolved `list<int>` (measured: `$result: array|int[]|list`). The other parts cannot be removed from the provider side — a type provider can only stop its own key from being read — so they are folded away at display time. Only subsumption is folded: `int|string` and `\Foo[]|\Bar[]` are left alone.
+- Drop `mixed` from a key access into an array shape. PhpStorm always adds it to a key access, so a value resolved to `string` was shown as `mixed|string`.
+- Leave the standard hover alone when nothing is dropped, so a variable whose type is already precise keeps everything the PHP plugin writes about it.
+- Do not add the plural form when it is the same type as the generic form it accompanies. `array<User>` is another spelling of `User[]`, so adding it put the same type in the union twice without making any element reachable.
+
 ## 0.43.0
 
 - Fill an argument that is not written at the call site with the parameter's declared default. `init($input)` decides its condition on `Shape::AUTO`, which is neither of the two named cases, so the nested conditional folds all three levels down to the shape of the array literal.

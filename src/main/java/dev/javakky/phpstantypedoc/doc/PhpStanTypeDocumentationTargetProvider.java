@@ -28,6 +28,11 @@ public final class PhpStanTypeDocumentationTargetProvider implements Documentati
         if (keyword.isPresent()) {
             return List.of(keyword.get());
         }
+        // エイリアスに当たらない変数。解けた型と抽象型が並ぶので、整理して減る場合だけ引き取る
+        Optional<SimplifiedVariableTypeTarget> variable = SimplifiedVariableTypeTarget.at(file, offset);
+        if (variable.isPresent()) {
+            return List.of(variable.get());
+        }
         return PhpFunctionDocumentationTarget.at(file, offset, resolver)
                 .<List<? extends DocumentationTarget>>map(List::of)
                 .orElseGet(List::of);
