@@ -11,6 +11,11 @@
 
 
 
+## 0.33.0
+
+- Treat a word as a keyword only where a type is actually written. Being inside a PHPDoc is not enough: prose mentions `list`, and `@phpstan-import-type ... as X` puts `as` there too.
+- Decide that position from the `PhpDocType` the PHP parser already builds, rather than counting brackets by hand. The hand-written scan works a line at a time and lost a multi-line array shape; unions, intersections, parentheses and line breaks are all covered by tests now.
+
 ## 0.31.0
 
 - Explain `min` and `max`. Neither appears in the reserved-word tables: they are bounds inside `int<1, max>`, held as `TIntRange::BOUND_MIN` in Psalm and compared by name in PHPStan. Building the catalogue from the reserved tables alone missed them by construction.

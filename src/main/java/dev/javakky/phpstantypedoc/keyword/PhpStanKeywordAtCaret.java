@@ -4,14 +4,18 @@ import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
+import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocType;
+import dev.javakky.phpstantypedoc.parser.PhpDocTypeReferenceDetector;
+import dev.javakky.phpstantypedoc.parser.PhpFileModelCache;
 
 import java.util.Optional;
 
 /**
  * キャレット位置にある型キーワードを取り出す。
  *
- * <p>対象は PHPDoc の中だけ。通常のコードにも `string` や `list` は現れるので、そこまで
- * 引き受けると PHP 本来の移動先を奪う。
+ * <p>対象は PHPDoc の中の、実際に型が書かれている位置だけ。通常のコードにも `string` や `list` は
+ * 現れるし、PHPDoc の説明文や `@phpstan-import-type ... as X` の `as` も同じ綴りを持つ。
+ * そこまで引き受けると、型でない語にキーワードの説明を出すことになる。
  */
 public final class PhpStanKeywordAtCaret {
     private PhpStanKeywordAtCaret() {
@@ -22,7 +26,8 @@ public final class PhpStanKeywordAtCaret {
             return Optional.empty();
         }
         PsiElement element = file.findElementAt(offset);
-        if (PsiTreeUtil.getParentOfType(element, PhpDocComment.class, false) == null) {
+        PhpDocComment doc = PsiTreeUtil.getParentOfType(element, PhpDocComment.class, false);
+        if (doc == null || !isTypePosition(file, doc, offset)) {
             return Optional.empty();
         }
         String text = file.getText();
@@ -42,6 +47,33 @@ public final class PhpStanKeywordAtCaret {
             return Optional.empty();
         }
         return PhpStanTypeKeywords.find(text.substring(start, end));
+    }
+
+    /**
+     * その位置に型が書かれているか。PHPDoc の中というだけでは足りない。
+     *
+     * <p>説明文にも `list` や `max` は現れるし、`@phpstan-import-type X from Y as Z` の `as` も
+     * PHPDoc の中にある。そこまで拾うと、型でない語にキーワードの説明を出してしまう。
+     *
+     * <p>型が書かれる場所は 2 種類ある。`@param` / `@return` / `@var` の型と、
+     * `@phpstan-type` の本体。
+     */
+    private static boolean isTypePosition(PsiFile file, PhpDocComment doc, int offset) {
+        // まず PHP が型と認識した範囲を使う。union / intersection / 括弧 / 複数行を
+        // 自前で数えると必ずどこかで外れる (複数行の array shape で実際に外れた)
+        if (PsiTreeUtil.getParentOfType(file.findElementAt(offset), PhpDocType.class, false) != null) {
+            return true;
+        }
+        boolean inTag = new PhpDocTypeReferenceDetector()
+                .detect(doc.getText(), doc.getTextRange().getStartOffset(), offset)
+                .isPresent();
+        if (inTag) {
+            return true;
+        }
+        return PhpFileModelCache.of(file).findDocBlockContainingOffset(offset)
+                .filter(block -> block.aliases().stream()
+                        .anyMatch(alias -> alias.typeBodyRange().containsExclusiveEnd(offset)))
+                .isPresent();
     }
 
     private static boolean isWordPart(char c) {
