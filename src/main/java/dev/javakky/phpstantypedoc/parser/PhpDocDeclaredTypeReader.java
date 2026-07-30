@@ -15,9 +15,9 @@ import java.util.List;
  * {@code getType()} は解決済みの型を返すのでエイリアス名が失われる。
  */
 public final class PhpDocDeclaredTypeReader {
-    public static final List<String> PARAM_TAGS = List.of("@param", "@phpstan-param");
-    public static final List<String> RETURN_TAGS = List.of("@return", "@phpstan-return");
-    public static final List<String> VAR_TAGS = List.of("@var", "@phpstan-var");
+    public static final List<String> PARAM_TAGS = List.of("@phpstan-param", "@param");
+    public static final List<String> RETURN_TAGS = List.of("@phpstan-return", "@return");
+    public static final List<String> VAR_TAGS = List.of("@phpstan-var", "@var");
 
     private PhpDocDeclaredTypeReader() {
     }

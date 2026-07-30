@@ -21,18 +21,19 @@ import java.util.Collection;
  * 変換する。遷移後の PHP クラス documentation にある同形式のリンクもこの handler が処理する。
  */
 public final class PhpStanTypeDocumentationLinkHandler implements DocumentationLinkHandler {
-    private static final String PSI_ELEMENT_PROTOCOL = "psi_element://";
-
     @Override
     public @Nullable LinkResolveResult resolveLink(
             @NotNull DocumentationTarget target,
             @NotNull String url
     ) {
         PsiElement context = contextElement(target);
-        if (context == null || !url.startsWith(PSI_ELEMENT_PROTOCOL)) {
+        if (context == null || !url.startsWith(PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL)) {
             return null;
         }
-        String fqn = url.substring(PSI_ELEMENT_PROTOCOL.length());
+        String fqn = url.substring(PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL.length());
+        if (fqn.contains("#")) {
+            return null;
+        }
         Collection<PhpClass> classes =
                 PhpIndex.getInstance(context.getProject()).getClassesByFQN(fqn);
         if (classes.size() != 1) {
@@ -42,12 +43,16 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
         return LinkResolveResult.resolvedTarget(resolved);
     }
 
+
     private PsiElement contextElement(DocumentationTarget target) {
         if (target instanceof PhpStanTypeDocumentationTarget phpStanTarget) {
             return phpStanTarget.contextElement();
         }
         if (target instanceof PhpClassDocumentationTarget classTarget) {
             return classTarget.contextElement();
+        }
+        if (target instanceof PhpFunctionDocumentationTarget functionTarget) {
+            return functionTarget.contextElement();
         }
         return null;
     }

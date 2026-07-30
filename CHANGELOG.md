@@ -1,5 +1,14 @@
 # Changelog
 
+
+## 0.12.0
+
+- Point alias links at the declaring class instead of encoding the alias in a URL fragment. A `psi_element://` link with a fragment made the platform attempt PSI resolution before reaching the link handler, and the click failed with "documentation not found". A plain class FQN resolves normally, and the alias definition is visible in that class's PHPDoc.
+
+## 0.11.0
+
+- Preserve PHP's function and method Quick Documentation while adding linked PHPStan type alias names to the existing `Parameters:` and `Returns:` sections.
+
 ## 0.10.0
 
 - Make links inside this plugin's Quick Documentation resolve to documentation targets. The links were rendered as `psi_element://` anchors, but the platform's built-in handler only accepts PSI-backed source targets and ignored this plugin's custom target.

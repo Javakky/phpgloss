@@ -16,8 +16,11 @@ public final class PhpStanTypeDocumentationTargetProvider implements Documentati
     @Override
     public @NotNull List<? extends DocumentationTarget> documentationTargets(@NotNull PsiFile file, int offset) {
         Optional<ResolvedPhpStanTypeTarget> resolved = resolver.resolveAt(file, offset);
-        return resolved.<List<? extends DocumentationTarget>>map(target -> List.of(new PhpStanTypeDocumentationTarget(file, target)))
+        if (resolved.isPresent()) {
+            return List.of(new PhpStanTypeDocumentationTarget(file, resolved.get()));
+        }
+        return PhpFunctionDocumentationTarget.at(file, offset, resolver)
+                .<List<? extends DocumentationTarget>>map(List::of)
                 .orElseGet(List::of);
     }
 }
-
