@@ -6,6 +6,9 @@ import com.jetbrains.php.PhpIndex;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
 import com.jetbrains.php.lang.psi.elements.Function;
 import com.jetbrains.php.lang.psi.elements.FunctionReference;
+import com.jetbrains.php.lang.psi.elements.Method;
+import com.jetbrains.php.lang.psi.elements.MethodReference;
+import com.jetbrains.php.lang.psi.elements.PhpClass;
 import com.jetbrains.php.lang.psi.elements.Parameter;
 import com.jetbrains.php.lang.psi.elements.PhpTypedElement;
 import com.jetbrains.php.lang.psi.resolve.types.PhpType;
@@ -39,6 +42,18 @@ final class CallSiteGenericResolver {
     private static final char FIELD = 'ᨤ';
     /** 引数の「型」と「書かれたテキスト」を区切る文字。条件型の判定にテキストが要る。 */
     private static final char SUBFIELD = 'ᨦ';
+    /** メソッド呼び出しであることを表す印。続けてレシーバのシグネチャを持つ。 */
+    private static final char METHOD = 'ᨧ';
+    /**
+     * 埋め込むシグネチャの中に区切り文字が現れるため、退避先を用意する。
+     *
+     * <p>退避文字は外側専用にする。埋め込むシグネチャの中には、この plugin 自身が索引時に
+     * 作った未解決型が入れ子で含まれ、その中の `|` は既に {@link #UNION_ESCAPE} で退避済み。
+     * 同じ文字を使うと、外側を戻したときに内側まで戻ってしまい、入れ子の型が壊れる。
+     */
+    private static final char OUTER_UNION_ESCAPE = 'ᨪ';
+    private static final char FIELD_ESCAPE = 'ᨨ';
+    private static final char SUBFIELD_ESCAPE = 'ᨩ';
 
     private CallSiteGenericResolver() {
     }
@@ -47,14 +62,20 @@ final class CallSiteGenericResolver {
      * 呼び出しから、索引後に解決できる形の文字列を作る。ローカル情報しか使わない。
      */
     static String encode(FunctionReference reference) {
-        StringBuilder encoded = new StringBuilder(reference.getName());
+        StringBuilder encoded = new StringBuilder();
+        if (reference instanceof MethodReference method
+                && method.getClassReference() instanceof PhpTypedElement receiver) {
+            // レシーバの型は索引後でないと決まらないので、シグネチャのまま持ち回る
+            encoded.append(METHOD).append(escapeSignature(receiver.getType().toString())).append(FIELD);
+        }
+        encoded.append(reference.getName());
         for (PsiElement argument : reference.getParameters()) {
             encoded.append(FIELD);
             if (argument instanceof PhpTypedElement typed) {
-                encoded.append(typed.getType().toString().replace('|', UNION_ESCAPE));
+                encoded.append(escapeSignature(typed.getType().toString()));
             }
             // 条件型は実引数の値 (`Shape::AS_LIST`) で分岐するため、型だけでは足りない
-            encoded.append(SUBFIELD).append(argument.getText().replace('|', UNION_ESCAPE));
+            encoded.append(SUBFIELD).append(escapeSignature(argument.getText()));
         }
         return encoded.toString();
     }
@@ -68,13 +89,87 @@ final class CallSiteGenericResolver {
         if (fields.isEmpty()) {
             return null;
         }
+        if (encoded.charAt(0) == METHOD) {
+            return methodResultOf(project, fields);
+        }
         String functionName = fields.getFirst();
         List<Argument> arguments = fields.subList(1, fields.size()).stream().map(Argument::parse).toList();
         PhpType result = new PhpType();
         for (Function function : PhpIndex.getInstance(project).getFunctionsByName(functionName)) {
-            PhpType resolved = returnTypeOf(project, function, arguments);
+            PhpType resolved = returnTypeOf(project, function, arguments, Map.of());
             if (resolved != null) {
                 result.add(resolved);
+            }
+        }
+        return result.isEmpty() ? null : result;
+    }
+
+    /**
+     * メソッド呼び出しを、その場で (索引外で) 解く。
+     *
+     * <p>レシーバの型引数はシグネチャを持ち回ると落ちる (実測)。`global()` で解けた型からなら取れる。
+     * 索引中に呼ばれないことは呼び出し側が保証する。
+     */
+    static @Nullable PhpType resolveMethodHere(MethodReference reference) {
+        if (!(reference.getClassReference() instanceof PhpTypedElement receiver) || reference.getName() == null) {
+            return null;
+        }
+        Project project = reference.getProject();
+        PhpType receiverType = receiver.getType().global(project);
+        List<Argument> arguments = new ArrayList<>();
+        for (PsiElement argument : reference.getParameters()) {
+            String signature = argument instanceof PhpTypedElement typed ? typed.getType().toString() : "";
+            arguments.add(new Argument(signature, argument.getText()));
+        }
+        PhpType result = new PhpType();
+        for (String typeString : receiverType.getTypesWithParametrisedParts()) {
+            int angle = typeString.indexOf('<');
+            if (angle < 0) {
+                continue;
+            }
+            for (PhpClass phpClass : PhpIndex.getInstance(project).getClassesByFQN(typeString.substring(0, angle))) {
+                Method method = phpClass.findMethodByName(reference.getName());
+                Map<String, String> seed = GenericTypeArguments.of(phpClass, typeString);
+                if (method == null || seed.isEmpty()) {
+                    continue;
+                }
+                PhpType resolved = returnTypeOf(project, method, arguments, seed);
+                if (resolved != null) {
+                    result.add(resolved);
+                }
+            }
+        }
+        return result.isEmpty() ? null : result;
+    }
+
+    /**
+     * メソッド呼び出しの戻り値。型変数はレシーバの型引数と実引数の両方から決まる。
+     *
+     * <p>`$op->map($fn)` の `V` はレシーバ `Op<\App\User>` 側にある。関数呼び出しと違い、
+     * 実引数だけを見ても決まらない。
+     */
+    private static @Nullable PhpType methodResultOf(Project project, List<String> fields) {
+        String receiverSignature = unescapeSignature(fields.getFirst().substring(1));
+        if (fields.size() < 2) {
+            return null;
+        }
+        String methodName = fields.get(1);
+        List<Argument> arguments = fields.subList(2, fields.size()).stream().map(Argument::parse).toList();
+        PhpType receiverType = actualTypeOf(project, receiverSignature);
+        PhpType result = new PhpType();
+        for (String typeString : receiverType.getTypesWithParametrisedParts()) {
+            int angle = typeString.indexOf('<');
+            String classFqn = angle < 0 ? typeString : typeString.substring(0, angle);
+            for (PhpClass phpClass : PhpIndex.getInstance(project).getClassesByFQN(classFqn)) {
+                Method method = phpClass.findMethodByName(methodName);
+                if (method == null) {
+                    continue;
+                }
+                PhpType resolved = returnTypeOf(
+                        project, method, arguments, GenericTypeArguments.of(phpClass, typeString));
+                if (resolved != null) {
+                    result.add(resolved);
+                }
             }
         }
         return result.isEmpty() ? null : result;
@@ -83,9 +178,12 @@ final class CallSiteGenericResolver {
     private static @Nullable PhpType returnTypeOf(
             Project project,
             Function function,
-            List<Argument> arguments
+            List<Argument> arguments,
+            Map<String, String> seed
     ) {
-        Collection<String> templates = PhpGenericsBaseExtendedWithGenericTypeProvider.getTemplates(function);
+        Collection<String> templates =
+                new java.util.LinkedHashSet<>(PhpGenericsBaseExtendedWithGenericTypeProvider.getTemplates(function));
+        templates.addAll(seed.keySet());
         PhpDocComment doc = function.getDocComment();
         if (templates.isEmpty() || doc == null) {
             return null;
@@ -97,6 +195,7 @@ final class CallSiteGenericResolver {
             return null;
         }
         Map<String, String> bindings = TemplateUnification.empty();
+        bindings.putAll(seed);
         for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
             String declared = PhpDocDeclaredTypeReader.typeNameFor(
                     doc, PhpDocDeclaredTypeReader.PARAM_TAGS, parameters[i].getName());
@@ -160,6 +259,24 @@ final class CallSiteGenericResolver {
      * 複数行にまたがる型から PHPDoc の飾り (行頭の `*`) を落として 1 行にする。
      * 落とさないと、入れ子の条件型が `*   ($mode is ...` の形になり読めない。
      */
+    /**
+     * 埋め込むシグネチャから区切り文字を退避する。他のプロバイダの未解決型 (自分のものも含む) が
+     * 入れ子で現れるため、退避しないと分割位置が壊れる。
+     */
+    private static String escapeSignature(String signature) {
+        return signature
+                .replace('|', OUTER_UNION_ESCAPE)
+                .replace(FIELD, FIELD_ESCAPE)
+                .replace(SUBFIELD, SUBFIELD_ESCAPE);
+    }
+
+    private static String unescapeSignature(String encoded) {
+        return encoded
+                .replace(SUBFIELD_ESCAPE, SUBFIELD)
+                .replace(FIELD_ESCAPE, FIELD)
+                .replace(OUTER_UNION_ESCAPE, '|');
+    }
+
     private static String stripDocDecoration(String body) {
         StringBuilder result = new StringBuilder();
         for (String line : body.split("\n")) {
@@ -187,9 +304,9 @@ final class CallSiteGenericResolver {
         static Argument parse(String encoded) {
             int separator = encoded.indexOf(SUBFIELD);
             return separator < 0
-                    ? new Argument(encoded, "")
-                    : new Argument(encoded.substring(0, separator),
-                            encoded.substring(separator + 1).replace(UNION_ESCAPE, '|'));
+                    ? new Argument(unescapeSignature(encoded), "")
+                    : new Argument(unescapeSignature(encoded.substring(0, separator)),
+                            unescapeSignature(encoded.substring(separator + 1)));
         }
     }
 
@@ -221,7 +338,7 @@ final class CallSiteGenericResolver {
      * <p>{@code PhpType#add} は文字列を union として分解しないので、先に自分で分ける。
      */
     private static PhpType actualTypeOf(Project project, String signature) {
-        List<String> parts = PhpType.splitTopLevelUnion(signature.replace(UNION_ESCAPE, '|'));
+        List<String> parts = PhpType.splitTopLevelUnion(signature);
         PhpType raw = new PhpType();
         parts.forEach(raw::add);
         PhpType completed = PhpIndex.getInstance(project).completeType(project, raw, new HashSet<>());

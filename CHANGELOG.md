@@ -11,6 +11,11 @@
 
 
 
+## 0.38.0
+
+- Resolve type variables on method calls too, taking them from the receiver's type argument as well as from the call's arguments. A conditional return type on a method is evaluated the same way.
+- Resolve a method call in place rather than carrying the receiver's signature through to the completion pass, which loses the type argument.
+
 ## 0.37.0
 
 - Fold nested conditional return types instead of reading only the outermost one. Real code nests them three deep, and stopping at the first level emitted the remaining `($mode is ... )` text as if it were a type.

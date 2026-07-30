@@ -1,8 +1,10 @@
 package dev.javakky.phpstantypedoc.type;
 
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiElement;
 import com.jetbrains.php.lang.psi.elements.FunctionReference;
+import com.jetbrains.php.lang.psi.elements.MethodReference;
 import com.jetbrains.php.lang.psi.elements.PhpNamedElement;
 import com.jetbrains.php.lang.psi.resolve.types.PhpType;
 import com.jetbrains.php.lang.psi.resolve.types.PhpTypeProvider4;
@@ -30,6 +32,13 @@ public final class PhpStanCallSiteGenericTypeProvider implements PhpTypeProvider
     public @Nullable PhpType getType(PsiElement element) {
         if (!(element instanceof FunctionReference reference) || reference.getName() == null) {
             return null;
+        }
+        if (element instanceof MethodReference method) {
+            // メソッドはレシーバの型引数が要る。シグネチャを持ち回って complete で復元しようとすると
+            // 型引数が落ちるため (実測)、索引外でその場で解く。索引中は諦めて null を返す
+            return DumbService.isDumb(element.getProject())
+                    ? null
+                    : CallSiteGenericResolver.resolveMethodHere(method);
         }
         return new PhpType().add("#" + KEY + CallSiteGenericResolver.encode(reference));
     }
