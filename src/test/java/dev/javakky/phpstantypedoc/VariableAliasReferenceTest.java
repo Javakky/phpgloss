@@ -62,7 +62,8 @@ public final class VariableAliasReferenceTest extends BasePlatformTestCase {
         // `$payload: CreateUserData` の形で、型本体も併せて出る
         assertTrue("変数名が出ていない: " + html, html.contains("$payload"));
         assertTrue("エイリアス名が出ていない: " + html, html.contains("CreateUserData"));
-        assertTrue("型本体が出ていない: " + html, html.contains("id: positive-int"));
+        // キーワードはリンクになるため、素の文字列でなく本文中の出現で見る
+        assertTrue("型本体が出ていない: " + html, html.contains("id: ") && html.contains("positive-int"));
         // エイリアス名は定義元クラスへのリンクになっている
         assertTrue("定義元クラスへのリンクが無い: " + html, html.contains("psi_element://\\App\\User"));
     }

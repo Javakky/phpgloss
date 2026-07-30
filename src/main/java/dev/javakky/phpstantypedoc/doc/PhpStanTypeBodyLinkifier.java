@@ -4,24 +4,26 @@ import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.jetbrains.php.PhpIndex;
 import com.jetbrains.php.lang.psi.elements.PhpClass;
+import dev.javakky.phpstantypedoc.keyword.PhpStanTypeKeywords;
 
 import java.util.Collection;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * 型本体に現れるクラス名を Quick Documentation 内のリンクにする。
+ * 型本体に現れる名前を Quick Documentation 内のリンクにする。
  *
- * <p>`array{users: non-empty-list<User>}` の `User` からクラス定義へ飛べるようにする。
- * リンクは PHP プラグインが使っている `psi_element://` 形式で、解決は platform の
- * {@code PsiDocumentationLinkHandler} に任せる。
+ * <p>`array{users: non-empty-list<User>}` なら、`User` はクラス定義へ、`non-empty-list` は
+ * 型キーワードの説明へ飛ばす。
  *
- * <p>候補は大文字始まりの識別子に限る。PHPStan の型キーワード (`int` / `non-empty-list` 等) は
- * すべて小文字なので、これで実質的に除外できる。名前で引いて 1 クラスに定まらない場合は
- * 定義元と同じ名前空間のものを採り、それでも決まらなければリンクにしない。
+ * <p>大文字始まりならクラス名として扱い、`psi_element://` 形式で PHP プラグインと同じ経路に乗せる。
+ * 名前で引いて 1 クラスに定まらない場合は定義元と同じ名前空間のものを採り、それでも決まらなければ
+ * リンクにしない。小文字始まりは同梱カタログに載っているものだけをキーワードとして扱う。
  */
 final class PhpStanTypeBodyLinkifier {
     private static final Pattern IDENTIFIER = Pattern.compile("\\\\?[A-Z][A-Za-z0-9_]*(?:\\\\[A-Z][A-Za-z0-9_]*)*");
+    /** クラス名とキーワードをまとめて拾う。どちらとして扱うかは {@link #linkFor} で決める。 */
+    private static final Pattern TOKEN = Pattern.compile("\\\\?[A-Za-z_][A-Za-z0-9_-]*(?:\\\\[A-Za-z_][A-Za-z0-9_]*)*");
 
     private final Project project;
     private final String definingClassFqcn;
@@ -39,20 +41,50 @@ final class PhpStanTypeBodyLinkifier {
             return escapedTypeBody;
         }
         StringBuilder builder = new StringBuilder(escapedTypeBody.length());
-        Matcher matcher = IDENTIFIER.matcher(escapedTypeBody);
+        Matcher matcher = TOKEN.matcher(escapedTypeBody);
         int cursor = 0;
         while (matcher.find()) {
-            String fqn = resolveClassFqn(matcher.group());
-            if (fqn == null) {
+            String url = linkFor(escapedTypeBody, matcher);
+            if (url == null) {
                 continue;
             }
             builder.append(escapedTypeBody, cursor, matcher.start())
-                    .append("<a href=\"psi_element://").append(fqn).append("\">")
+                    .append("<a href=\"").append(url).append("\">")
                     .append(matcher.group())
                     .append("</a>");
             cursor = matcher.end();
         }
         return builder.append(escapedTypeBody, cursor, escapedTypeBody.length()).toString();
+    }
+
+    /**
+     * @return このトークンに張るリンク。張らない場合は null
+     */
+    private String linkFor(String escapedTypeBody, Matcher matcher) {
+        String token = matcher.group();
+        if (IDENTIFIER.matcher(token).matches()) {
+            String fqn = resolveClassFqn(token);
+            return fqn == null ? null : "psi_element://" + fqn;
+        }
+        // キーワードかどうかは綴りの形でなく、列挙されているかで決める。エイリアス名は
+        // キャメルのこともスネークのこともあり、形からキーワードと区別できない
+        if (isShapeKey(escapedTypeBody, matcher.end())) {
+            return null;
+        }
+        return PhpStanTypeKeywords.find(token)
+                .map(keyword -> PhpStanTypeDocumentationLink.forKeyword(keyword.name()))
+                .orElse(null);
+    }
+
+    /**
+     * `array{list: int}` の `list` はキー名であってキーワードではない。直後の `:` で見分ける。
+     */
+    private boolean isShapeKey(String text, int end) {
+        int cursor = end;
+        while (cursor < text.length() && (text.charAt(cursor) == ' ' || text.charAt(cursor) == '?')) {
+            cursor++;
+        }
+        return cursor < text.length() && text.charAt(cursor) == ':';
     }
 
     /**

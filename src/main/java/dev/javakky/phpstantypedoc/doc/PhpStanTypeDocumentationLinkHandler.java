@@ -46,6 +46,15 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
         if (!url.startsWith(PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL)) {
             return null;
         }
+        var keyword = PhpStanTypeDocumentationLink.parseKeyword(url);
+        if (keyword.isPresent()) {
+            PsiElement keywordContext = contextElement(target);
+            return keywordContext == null ? null : keyword
+                    .flatMap(dev.javakky.phpstantypedoc.keyword.PhpStanTypeKeywords::find)
+                    .map(found -> LinkResolveResult.resolvedTarget(
+                            new PhpStanKeywordDocumentationTarget(found, keywordContext)))
+                    .orElse(null);
+        }
         var aliasReferenceOpt = PhpStanTypeDocumentationLink.parseAlias(url);
         boolean aliasLink = aliasReferenceOpt.isPresent();
         PsiElement context = contextElement(target);
@@ -200,6 +209,9 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
         }
         if (target instanceof PhpNamespaceDocumentationTarget namespaceTarget) {
             return namespaceTarget.contextElement();
+        }
+        if (target instanceof PhpStanKeywordDocumentationTarget keywordTarget) {
+            return keywordTarget.contextElement();
         }
         return null;
     }

@@ -19,6 +19,8 @@ final class PhpStanTypeDocumentationLink {
      * {@code psi_element://} の中に埋め込む。`#` は platform の PSI 解決を壊すので使えない。
      */
     private static final String SEPARATOR = "::";
+    /** 型キーワードのリンクの印。PHP の識別子に現れない形にして、クラス名と衝突させない。 */
+    private static final String KEYWORD_PREFIX = "phpstan-type-keyword/";
 
     private PhpStanTypeDocumentationLink() {
     }
@@ -34,6 +36,23 @@ final class PhpStanTypeDocumentationLink {
      */
     static String forAlias(String ownerClassFqn, String aliasName) {
         return PSI_ELEMENT_PROTOCOL + normalize(ownerClassFqn) + SEPARATOR + aliasName;
+    }
+
+    /**
+     * 型キーワード ({@code non-empty-string} 等) の説明へのリンク。
+     *
+     * <p>キーワードはクラスでも alias でもないので、名前空間に見えない印を先頭に置いて区別する。
+     */
+    static String forKeyword(String keyword) {
+        return PSI_ELEMENT_PROTOCOL + KEYWORD_PREFIX + keyword;
+    }
+
+    static Optional<String> parseKeyword(String url) {
+        if (!url.startsWith(PSI_ELEMENT_PROTOCOL + KEYWORD_PREFIX)) {
+            return Optional.empty();
+        }
+        String keyword = url.substring((PSI_ELEMENT_PROTOCOL + KEYWORD_PREFIX).length());
+        return keyword.isBlank() ? Optional.empty() : Optional.of(keyword);
     }
 
     static Optional<AliasReference> parseAlias(String url) {

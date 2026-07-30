@@ -11,6 +11,12 @@
 
 
 
+## 0.28.0
+
+- Explain the type keywords — `non-empty-string`, `positive-int`, `non-empty-list` and the rest — in Japanese, and navigate from one to where the analyser defines it. Psalm lists them in `TypeTokenizer::PSALM_RESERVED_WORDS`, PHPStan as `case` labels in `TypeNodeResolver`; both files are bundled (MIT, licences included) so the jump works even without the analyser installed, and the project's own copy under `vendor/` is preferred when present.
+- Decide what is a keyword from the enumerated list rather than the shape of the name. An alias may be written in camelCase or snake_case, so a lowercase-leading name says nothing on its own. A test parses the bundled sources and fails when the catalogue falls behind them.
+- Point PHP's own keyword links at the keyword instead of the element class. PHP resolves `non-empty-list<User>` to `User[]` and links the keyword text there, which answers a question nobody asked.
+
 ## 0.27.0
 
 - Resolve a link to an array type. PHP writes those as the element class with `[]` appended (`non-empty-list<User>` becomes `psi_element://\App\Domain\User[]`), which was rejected as a class name and reported the URL as malformed. Stopgap until type keywords carry their own documentation.

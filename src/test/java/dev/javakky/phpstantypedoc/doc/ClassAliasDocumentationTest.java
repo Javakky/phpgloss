@@ -28,7 +28,8 @@ public final class ClassAliasDocumentationTest extends BasePlatformTestCase {
         assertNotNull("クラスの documentation target が返らない", target);
         String html = target.computeDocumentation().toString();
         assertTrue("エイリアス名が出ていない: " + html, html.contains("UserData"));
-        assertTrue("型本体が出ていない: " + html, html.contains("id: positive-int"));
+        // キーワードはリンクになるため、素の文字列でなく本文中の出現で見る
+        assertTrue("型本体が出ていない: " + html, html.contains("id: ") && html.contains("positive-int"));
     }
 
     public void testImportedAliasIsShownOnTheImportingClass() {
@@ -59,7 +60,8 @@ public final class ClassAliasDocumentationTest extends BasePlatformTestCase {
         String html = target.computeDocumentation().toString();
         assertTrue("import した別名が出ていない: " + html, html.contains("CreateUserData"));
         assertTrue("import 元が出ていない: " + html, html.contains("Imported type: UserData"));
-        assertTrue("型本体が出ていない: " + html, html.contains("id: positive-int"));
+        // キーワードはリンクになるため、素の文字列でなく本文中の出現で見る
+        assertTrue("型本体が出ていない: " + html, html.contains("id: ") && html.contains("positive-int"));
     }
 
     public void testLeavesClassesWithoutAliasesToThePhpProvider() {

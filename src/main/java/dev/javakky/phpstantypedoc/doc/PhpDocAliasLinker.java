@@ -46,7 +46,7 @@ final class PhpDocAliasLinker {
         for (Map.Entry<String, String> entry : urls.entrySet()) {
             result = replaceSpanText(result, entry.getKey(), entry.getValue());
         }
-        return result;
+        return PhpDocKeywordLinker.relinkKeywords(result);
     }
 
     /**
