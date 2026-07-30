@@ -1,6 +1,11 @@
 # Changelog
 
 
+
+## 0.13.0
+
+- Show alias names in the rendered PHPDoc shown inside the editor, not just in Quick Documentation. Rendered comments come from `inlineDocumentationProvider`, a different extension point that the PHP plugin does not implement, so the alias names were missing there. Documents without a resolvable alias are left to the platform's own rendering.
+
 ## 0.12.0
 
 - Point alias links at the declaring class instead of encoding the alias in a URL fragment. A `psi_element://` link with a fragment made the platform attempt PSI resolution before reaching the link handler, and the click failed with "documentation not found". A plain class FQN resolves normally, and the alias definition is visible in that class's PHPDoc.

@@ -1,0 +1,107 @@
+package dev.javakky.phpstantypedoc.doc;
+
+import com.intellij.openapi.util.TextRange;
+import com.intellij.platform.backend.documentation.DocumentationTarget;
+import com.intellij.platform.backend.documentation.InlineDocumentation;
+import com.intellij.platform.backend.documentation.InlineDocumentationProvider;
+import com.intellij.psi.PsiDocCommentBase;
+import com.intellij.psi.PsiFile;
+import com.intellij.psi.util.PsiTreeUtil;
+import com.jetbrains.php.lang.documentation.PhpDocumentationProvider;
+import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
+import com.jetbrains.php.lang.psi.elements.Function;
+import dev.javakky.phpstantypedoc.PhpStanTypeResolverFacade;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Optional;
+
+/**
+ * エディタ内に PHPDoc をレンダリング表示する経路 (鉛筆 / 罫線の切り替え) に型エイリアス名を出す。
+ *
+ * <p>Quick Documentation は {@code targetProvider} から来るが、レンダリング表示は
+ * {@code inlineDocumentationProvider} から来る別経路で、PHP プラグインはこの拡張点を実装していない。
+ * platform の互換実装が PHP の {@code generateRenderedDoc} を呼んでいるので、同じ HTML を得て
+ * エイリアス名を追記したものを返す。
+ */
+public final class PhpStanInlineDocumentationProvider implements InlineDocumentationProvider {
+    private final PhpStanTypeResolverFacade resolver = new PhpStanTypeResolverFacade();
+    private final PhpDocumentationProvider provider = new PhpDocumentationProvider();
+
+    @Override
+    public @NotNull Collection<InlineDocumentation> inlineDocumentationItems(PsiFile file) {
+        if (file == null) {
+            return List.of();
+        }
+        List<InlineDocumentation> items = new ArrayList<>();
+        for (PhpDocComment comment : PsiTreeUtil.findChildrenOfType(file, PhpDocComment.class)) {
+            annotatedDocumentation(file, comment).ifPresent(items::add);
+        }
+        return items;
+    }
+
+    @Override
+    public @Nullable InlineDocumentation findInlineDocumentation(PsiFile file, TextRange textRange) {
+        if (file == null || textRange == null) {
+            return null;
+        }
+        var comment = PsiTreeUtil.findElementOfClassAtRange(
+                file, textRange.getStartOffset(), textRange.getEndOffset(), PhpDocComment.class);
+        return comment == null ? null : annotatedDocumentation(file, comment).orElse(null);
+    }
+
+    /**
+     * @return この PHPDoc が持つ関数の型エイリアスを解決できた場合だけ返す。
+     *         解決できないときは何も返さず、platform の互換実装が出す PHP 標準の表示に任せる
+     */
+    private Optional<InlineDocumentation> annotatedDocumentation(PsiFile file, PhpDocComment comment) {
+        Function function = PsiTreeUtil.getNextSiblingOfType(comment, Function.class);
+        if (function == null || function.isClosure()) {
+            return Optional.empty();
+        }
+        return PhpDocAliasAnnotator.of(file, function, resolver)
+                .map(annotator -> new AnnotatedInlineDocumentation(comment, function, annotator));
+    }
+
+    private final class AnnotatedInlineDocumentation implements InlineDocumentation {
+        private final PsiDocCommentBase comment;
+        private final Function function;
+        private final PhpDocAliasAnnotator annotator;
+
+        private AnnotatedInlineDocumentation(
+                PsiDocCommentBase comment,
+                Function function,
+                PhpDocAliasAnnotator annotator
+        ) {
+            this.comment = comment;
+            this.function = function;
+            this.annotator = annotator;
+        }
+
+        @Override
+        public @NotNull TextRange getDocumentationRange() {
+            return comment.getTextRange();
+        }
+
+        @Override
+        public @Nullable TextRange getDocumentationOwnerRange() {
+            return function.getTextRange();
+        }
+
+        @Override
+        public @Nullable String renderText() {
+            String html = provider.generateRenderedDoc(comment);
+            return html == null ? null : annotator.annotate(html);
+        }
+
+        @Override
+        public @Nullable DocumentationTarget getOwnerTarget() {
+            return PhpFunctionDocumentationTarget
+                    .at(function.getContainingFile(), function.getTextOffset(), resolver)
+                    .orElse(null);
+        }
+    }
+}
