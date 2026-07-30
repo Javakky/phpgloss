@@ -11,6 +11,11 @@
 
 
 
+## 0.29.0
+
+- Show the keyword's own documentation when the caret is on it, not only when its link is followed. PHP answers that position with the resolved type (`\App\User[]`), which never says what the keyword means.
+- Go to the analyser's definition when Go to Declaration is pressed on a keyword. PHP sees plain text there and reported that no declaration could be found.
+
 ## 0.28.0
 
 - Explain the type keywords — `non-empty-string`, `positive-int`, `non-empty-list` and the rest — in Japanese, and navigate from one to where the analyser defines it. Psalm lists them in `TypeTokenizer::PSALM_RESERVED_WORDS`, PHPStan as `case` labels in `TypeNodeResolver`; both files are bundled (MIT, licences included) so the jump works even without the analyser installed, and the project's own copy under `vendor/` is preferred when present.

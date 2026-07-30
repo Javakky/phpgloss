@@ -97,6 +97,46 @@ public final class TypeKeywordLinkTest extends BasePlatformTestCase {
                 html.contains("phpstan-type-keyword/userProfile"));
     }
 
+    /**
+     * キーワードに直接カーソルを当てたときも説明を出す。PHP は解決後の型
+     * (`\App\Domain\Account[]`) を出すので、キーワード自体の意味は分からない。
+     */
+    public void testShowsDocumentationWhenTheCaretIsOnTheKeyword() {
+        myFixture.addFileToProject("Account.php", """
+                <?php
+                namespace App\\Domain;
+
+                final class Account {}
+                """);
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
+        int offset = file.getText().indexOf("non-empty-list") + 2;
+
+        var targets = new PhpStanTypeDocumentationTargetProvider().documentationTargets(file, offset);
+
+        assertFalse("キーワードの documentation が返らない", targets.isEmpty());
+        String html = targets.getFirst().computeDocumentation().toString();
+        assertTrue("キーワードの説明が出ていない: " + html, html.contains("non-empty-list"));
+        assertTrue("説明本文が出ていない: " + html, html.contains("空でない"));
+    }
+
+    /**
+     * キーワードの上で Ctrl+B を押したら、解析ツール側の定義へ移動させる。
+     */
+    public void testGoToDeclarationOnKeyword() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
+        int offset = file.getText().indexOf("non-empty-list") + 2;
+        var element = file.findElementAt(offset);
+
+        var targets = new dev.javakky.phpstantypedoc.PhpStanTypeGotoDeclarationHandler()
+                .getGotoDeclarationTargets(element, offset, null);
+
+        assertNotNull("キーワードから移動できない", targets);
+        assertTrue("移動先が空", targets.length > 0);
+        assertTrue("解析ツールの定義を指していない: " + targets[0].getContainingFile().getName(),
+                targets[0].getContainingFile().getName().contains("TypeTokenizer")
+                        || targets[0].getContainingFile().getName().contains("TypeNodeResolver"));
+    }
+
     public void testResolvesKeywordLinkToDocumentation() {
         var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
         int offset = file.getText().lastIndexOf("Payload");
