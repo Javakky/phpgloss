@@ -3,6 +3,16 @@
 
 
 
+
+
+## 0.16.0
+
+- Navigate from an alias name to documentation for that alias itself. The platform's link dispatch calls every `DocumentationLinkHandler` without inspecting the URL, so a custom scheme does reach the handler — the earlier attempt failed for a different reason. A `psi_element://` URL cannot carry the alias, since the platform resolves that scheme as a PSI element and a fragment makes resolution fail.
+
+## 0.15.0
+
+- Carry a class's PHPStan type aliases into that class's Quick Documentation, and point alias names at the class that uses them. There is no way to navigate to documentation for the alias itself: the platform resolves `psi_element://` links on its own without consulting a link handler, so only real PSI elements can be reached. Linking to the declaring class loses the name — an imported `CreateUserData` is `UserData` there — so the link goes to the using class, where the name matches and the body is listed.
+
 ## 0.14.0
 
 - Make the alias name navigate to the alias itself rather than to its declaring class. The link handler now logs where resolution fails and falls back to the owner class instead of returning nothing, so a failure degrades to the previous behaviour rather than showing "documentation not found".

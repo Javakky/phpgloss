@@ -5,14 +5,17 @@ import java.util.Optional;
 /**
  * Quick Documentation 内で使うリンク。
  *
- * <p>リンク先はクラスの FQN だけにする。独自 scheme は documentation renderer から link handler
- * へ渡らず、{@code psi_element://} に fragment を付ける形は platform が先に PSI 解決を試みて
- * 「ドキュメントが見つかりません」になる。どちらも実機で確認した。素の FQN なら platform の
- * 解決がそのまま通り、alias は定義元クラスの PHPDoc として読める。
+ * <p>エイリアスへのリンクは独自 scheme を使う。{@code psi_element://} に alias 名を fragment として
+ * 付ける形は platform 側の PSI 解決が先に走って失敗するため使えない。
+ * {@code DocumentationLinkHandler} を回す platform の実装は URL を見ずに全 handler を試すので、
+ * 独自 scheme でも {@link PhpStanTypeDocumentationLinkHandler} に届く。
+ *
+ * <p>クラスへのリンクは PHP plugin と同じ {@code psi_element://} を使う。
  */
 final class PhpStanTypeDocumentationLink {
     static final String PSI_ELEMENT_PROTOCOL = "psi_element://";
-    private static final String TYPE_ALIAS_FRAGMENT = "#phpstan-type=";
+    static final String ALIAS_PROTOCOL = "phpstan-type://";
+    private static final String SEPARATOR = "/alias/";
 
     private PhpStanTypeDocumentationLink() {
     }
@@ -22,24 +25,25 @@ final class PhpStanTypeDocumentationLink {
     }
 
     /**
-     * エイリアスへ遷移するリンク。owner クラスの FQN に alias 名を fragment として付ける。
-     * この plugin の documentation target から出たリンクは、platform 標準の PSI handler が
-     * 対象外とするのでこの plugin の handler が処理する。
+     * エイリアス自身の documentation へのリンク。
+     *
+     * @param ownerClassFqn エイリアスを宣言 / import しているクラス。ここを起点に解決する
      */
     static String forAlias(String ownerClassFqn, String aliasName) {
-        return PSI_ELEMENT_PROTOCOL + normalize(ownerClassFqn) + TYPE_ALIAS_FRAGMENT + aliasName;
+        return ALIAS_PROTOCOL + normalize(ownerClassFqn) + SEPARATOR + aliasName;
     }
 
     static Optional<AliasReference> parseAlias(String url) {
-        if (!url.startsWith(PSI_ELEMENT_PROTOCOL)) {
+        if (!url.startsWith(ALIAS_PROTOCOL)) {
             return Optional.empty();
         }
-        int fragment = url.indexOf(TYPE_ALIAS_FRAGMENT, PSI_ELEMENT_PROTOCOL.length());
-        if (fragment < 0) {
+        String body = url.substring(ALIAS_PROTOCOL.length());
+        int separator = body.indexOf(SEPARATOR);
+        if (separator < 0) {
             return Optional.empty();
         }
-        String ownerClassFqn = url.substring(PSI_ELEMENT_PROTOCOL.length(), fragment);
-        String aliasName = url.substring(fragment + TYPE_ALIAS_FRAGMENT.length());
+        String ownerClassFqn = body.substring(0, separator);
+        String aliasName = body.substring(separator + SEPARATOR.length());
         if (ownerClassFqn.isBlank() || aliasName.isBlank()) {
             return Optional.empty();
         }

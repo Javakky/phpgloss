@@ -21,11 +21,17 @@ import org.jetbrains.annotations.Nullable;
 final class PhpClassDocumentationTarget implements DocumentationTarget {
     private final PhpClass phpClass;
     private final PsiElement sourceElement;
+    private final String aliasDetails;
     private final PhpDocumentationProvider provider = new PhpDocumentationProvider();
 
     PhpClassDocumentationTarget(PhpClass phpClass, PsiElement sourceElement) {
+        this(phpClass, sourceElement, "");
+    }
+
+    PhpClassDocumentationTarget(PhpClass phpClass, PsiElement sourceElement, String aliasDetails) {
         this.phpClass = phpClass;
         this.sourceElement = sourceElement;
+        this.aliasDetails = aliasDetails;
     }
 
     @Override
@@ -36,7 +42,8 @@ final class PhpClassDocumentationTarget implements DocumentationTarget {
                 (file, range) -> {
                     PsiElement element = file.findElementAt(range.getStartOffset());
                     PhpClass restored = PsiTreeUtil.getParentOfType(element, PhpClass.class, false);
-                    return restored == null ? null : new PhpClassDocumentationTarget(restored, restored);
+                    return restored == null ? null
+                            : new PhpClassDocumentationTarget(restored, restored, aliasDetails);
                 }
         );
     }
@@ -59,7 +66,7 @@ final class PhpClassDocumentationTarget implements DocumentationTarget {
     @Override
     public @Nullable DocumentationResult computeDocumentation() {
         String html = provider.generateDoc(phpClass, sourceElement);
-        return html == null ? null : DocumentationResult.documentation(html);
+        return html == null ? null : DocumentationResult.documentation(html + aliasDetails);
     }
 
     PsiElement contextElement() {

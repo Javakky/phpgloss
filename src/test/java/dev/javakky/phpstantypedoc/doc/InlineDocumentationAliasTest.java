@@ -47,7 +47,7 @@ public final class InlineDocumentationAliasTest extends BasePlatformTestCase {
         assertTrue("Parameters / Returns に alias 名が出ていない: " + html,
                 occurrences(html, ">CreateUserData</a>") >= 2);
         assertTrue("alias link が生成されていない: " + html,
-                html.contains("#phpstan-type=CreateUserData"));
+                html.contains("phpstan-type://\\App\\CreateUser/alias/CreateUserData"));
     }
 
     public void testLeavesDocsWithoutAliasesToThePlatform() {

@@ -130,9 +130,12 @@ public final class PhpDocAliasAnnotator {
         return html.substring(0, parameters) + section + html.substring(sectionEnd);
     }
 
-    /** エイリアス名をエイリアス自身の documentation へのリンクにする。 */
+    /** エイリアス名を、そのエイリアス自身の documentation へのリンクにする。 */
     private String aliasName(ResolvedAlias alias) {
         String name = PhpStanTypeHtmlRenderer.escape(alias.typeName());
+        if (ownerClassFqn == null || ownerClassFqn.isBlank()) {
+            return "&nbsp;<code>(" + name + ")</code>";
+        }
         String url = PhpStanTypeDocumentationLink.forAlias(ownerClassFqn, alias.typeName());
         return "&nbsp;<code>(<a href='" + url + "'>" + name + "</a>)</code>";
     }

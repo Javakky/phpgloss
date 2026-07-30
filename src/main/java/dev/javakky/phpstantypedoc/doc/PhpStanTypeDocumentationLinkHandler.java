@@ -40,7 +40,8 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
             @NotNull DocumentationTarget target,
             @NotNull String url
     ) {
-        if (!url.startsWith(PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL)) {
+        boolean aliasLink = url.startsWith(PhpStanTypeDocumentationLink.ALIAS_PROTOCOL);
+        if (!aliasLink && !url.startsWith(PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL)) {
             return null;
         }
         PsiElement context = contextElement(target);
@@ -49,10 +50,14 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
                     + " (target=" + target.getClass().getSimpleName() + ", url=" + url + ")");
             return null;
         }
-        var aliasReference = PhpStanTypeDocumentationLink.parseAlias(url);
-        if (aliasReference.isEmpty()) {
+        if (!aliasLink) {
             return resolveClass(context, url.substring(
                     PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL.length()));
+        }
+        var aliasReference = PhpStanTypeDocumentationLink.parseAlias(url);
+        if (aliasReference.isEmpty()) {
+            LOG.warn("PHPStan doc link: malformed alias url (" + url + ")");
+            return null;
         }
         LinkResolveResult alias = resolveAlias(context, aliasReference.get());
         if (alias != null) {

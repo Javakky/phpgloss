@@ -57,10 +57,13 @@ public final class PhpFunctionDocumentationTargetTest extends BasePlatformTestCa
         assertTrue("return alias が表示されていない: " + html,
                 occurrences(html, ">CreateUserData</a>") >= 2);
         // alias 名はエイリアス自身の documentation へのリンクにする
+        // alias 名はエイリアス自身の documentation へ遷移するリンクにする
         assertTrue("alias link が生成されていない: " + html,
-                html.contains("psi_element://\\App\\CreateUser#phpstan-type=CreateUserData"));
+                html.contains("phpstan-type://\\App\\CreateUser/alias/CreateUserData"));
+        assertTrue("複数 alias の link が生成されていない: " + html,
+                html.contains("phpstan-type://\\App\\CreateUser/alias/LocalData"));
         assertFalse("通常型まで alias link になっている: " + html,
-                html.contains("#phpstan-type=string"));
+                html.contains("/alias/string"));
     }
 
     public void testResolvesAliasLinkFromFunctionDocumentation() {
@@ -69,15 +72,9 @@ public final class PhpFunctionDocumentationTargetTest extends BasePlatformTestCa
         var source = new PhpStanTypeDocumentationTargetProvider()
                 .documentationTargets(file, offset).getFirst();
 
-        var alias = new PhpStanTypeDocumentationLinkHandler().resolveLink(
-                source,
-                "psi_element://\\App\\CreateUser#phpstan-type=CreateUserData"
-        );
-        assertNotNull("function documentation の alias link を解決できていない", alias);
-
         var classLink = new PhpStanTypeDocumentationLinkHandler().resolveLink(
                 source,
-                "psi_element://\\App\\User"
+                "psi_element://\\App\\CreateUser"
         );
         assertNotNull("function documentation のクラスリンクを解決できていない", classLink);
     }

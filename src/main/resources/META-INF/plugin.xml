@@ -15,6 +15,8 @@
         <lang.inspectionSuppressor language="PHP" implementationClass="dev.javakky.phpstantypedoc.inspection.PhpStanTypeAliasInspectionSuppressor"/>
         <platform.backend.documentation.linkHandler implementation="dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationLinkHandler"/>
         <platform.backend.documentation.targetProvider implementation="dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider"/>
+        <!-- リンクの行き先となるクラスの documentation に、そのクラスの型エイリアスを載せる -->
+        <platform.backend.documentation.psiTargetProvider order="first" implementation="dev.javakky.phpstantypedoc.doc.PhpStanClassDocumentationTargetProvider"/>
         <!-- platform の互換実装より先に評価させる (order=first がないと PHP 標準の表示が採られる) -->
         <platform.backend.documentation.inlineDocumentationProvider order="first" implementation="dev.javakky.phpstantypedoc.doc.PhpStanInlineDocumentationProvider"/>
     </extensions>
