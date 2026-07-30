@@ -37,5 +37,9 @@
 
     <extensions defaultExtensionNs="com.jetbrains.php">
         <arrayShapesProvider implementation="dev.javakky.phpstantypedoc.shape.PhpStanImportedArrayShapeProvider"/>
+        <!-- ジェネリッククラスの型引数を __invoke の戻り値へ伝播させる (WI-65938 が未解決のため) -->
+        <typeProvider4 implementation="dev.javakky.phpstantypedoc.type.PhpStanInvokeTypeProvider"/>
+        <!-- 呼び出し位置の実引数から型変数を解く (PhpStorm は型引数の中の型変数を残すため) -->
+        <typeProvider4 implementation="dev.javakky.phpstantypedoc.type.PhpStanCallSiteGenericTypeProvider"/>
     </extensions>
 </idea-plugin>

@@ -11,6 +11,12 @@
 
 
 
+## 0.35.0
+
+- Resolve a type variable that sits inside a type argument. PhpStorm resolves `@return T` from the call's arguments but leaves `@return Op<V>` as `Op<#V>`, so everything downstream loses the element type.
+- Carry that type argument into the class's `__invoke`, so `$op()` and `opOf(...)()` keep both the element type and the `non-empty-list` structure instead of collapsing to `array` (YouTrack WI-65938, open since 2022).
+- Substitute the type variable on the PHPDoc text rather than through PhpStorm's own `substituteTypesWithMapping`, which only matches the internally encoded form and left the written `V` untouched.
+
 ## 0.34.0
 
 - Carry the upstream English wording for every keyword, taken from the one-line class docblocks in Psalm's `Type\Atomic\T*.php` (matched to keywords through `Atomic::create()`) and from PHPStan's accessory types. Where no upstream sentence exists the English is written here.
