@@ -132,9 +132,9 @@ public final class TypeKeywordLinkTest extends BasePlatformTestCase {
 
         assertNotNull("キーワードから移動できない", targets);
         assertTrue("移動先が空", targets.length > 0);
-        assertTrue("解析ツールの定義を指していない: " + targets[0].getContainingFile().getName(),
-                targets[0].getContainingFile().getName().contains("TypeTokenizer")
-                        || targets[0].getContainingFile().getName().contains("TypeNodeResolver"));
+        // 単語表 (TypeTokenizer) でなく、意味を決めている場所 (Atomic::create) へ着地する
+        assertEquals("意味を決めている場所を指していない",
+                "psalm-Atomic.php", targets[0].getContainingFile().getName());
     }
 
     public void testResolvesKeywordLinkToDocumentation() {

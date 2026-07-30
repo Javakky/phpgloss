@@ -11,6 +11,10 @@
 
 
 
+## 0.30.0
+
+- Land on where a keyword's meaning is decided, not merely where the word is listed. Psalm's `PSALM_RESERVED_WORDS` is a tokeniser word table; `Atomic::create()` is what returns `TIntRange(1, null)` for `positive-int`. The chain is now Psalm `Atomic` → PHPStan `TypeNodeResolver` → Psalm `TPropertiesOf` → `TypeParser` → the word table, and a test names the three keywords that still reach only the table and why.
+
 ## 0.29.0
 
 - Show the keyword's own documentation when the caret is on it, not only when its link is followed. PHP answers that position with the resolved type (`\App\User[]`), which never says what the keyword means.

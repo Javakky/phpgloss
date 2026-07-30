@@ -25,9 +25,20 @@ import java.util.Optional;
  * 入っていない場合 (PHPStan は phar 配布でソースが読めないこともある) は同梱したコピーへ飛ぶ。
  */
 public final class PhpStanKeywordDefinition {
+    /**
+     * 上から順に試す。並びは「その語の意味を決めている場所」が先。
+     *
+     * <p>Psalm の {@code TypeTokenizer::PSALM_RESERVED_WORDS} はトークナイザ用の単語表でしかなく、
+     * 飛んでも「その語が存在する」ことしか分からない。意味は {@code Atomic::create()} が
+     * 型オブジェクトを返す形で持っている。総称型 ({@code key-of} 等) は
+     * {@code TypeParser} 側で扱われるので、そこも見る。
+     */
     private static final List<Source> SOURCES = List.of(
-            new Source("\\Psalm\\Internal\\Type\\TypeTokenizer", "'%s' => true", "psalm-TypeTokenizer.php"),
-            new Source("\\PHPStan\\PhpDoc\\TypeNodeResolver", "case '%s':", "phpstan-TypeNodeResolver.php")
+            new Source("\\Psalm\\Type\\Atomic", "case '%s':", "psalm-Atomic.php"),
+            new Source("\\PHPStan\\PhpDoc\\TypeNodeResolver", "case '%s':", "phpstan-TypeNodeResolver.php"),
+            new Source("\\Psalm\\Type\\Atomic\\TPropertiesOf", "'%s'", "psalm-TPropertiesOf.php"),
+            new Source("\\Psalm\\Internal\\Type\\TypeParser", "'%s'", "psalm-TypeParser.php"),
+            new Source("\\Psalm\\Internal\\Type\\TypeTokenizer", "'%s' => true", "psalm-TypeTokenizer.php")
     );
 
     private PhpStanKeywordDefinition() {
