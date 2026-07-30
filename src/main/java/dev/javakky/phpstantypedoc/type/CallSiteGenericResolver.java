@@ -220,8 +220,7 @@ final class CallSiteGenericResolver {
         Map<String, String> bindings = TemplateUnification.empty();
         bindings.putAll(seed);
         for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
-            String declared = PhpDocDeclaredTypeReader.typeNameFor(
-                    doc, PhpDocDeclaredTypeReader.PARAM_TAGS, parameters[i].getName());
+            String declared = declaredParamOf(doc, parameters[i].getName());
             String signature = arguments.get(i).signature();
             if (declared == null || signature.isBlank()) {
                 continue;
@@ -243,6 +242,23 @@ final class CallSiteGenericResolver {
             resolved.add(plural);
         }
         return resolved;
+    }
+
+    /**
+     * 引数の宣言を読む。`@phpstan-param` にも条件型が書かれていることがあり
+     * (実物の `init` がそう)、それでは型変数を決められないので素の `@param` に落とす。
+     */
+    private static @Nullable String declaredParamOf(PhpDocComment doc, String parameterName) {
+        String declared = PhpDocDeclaredTypeReader.typeNameFor(
+                doc, PhpDocDeclaredTypeReader.PARAM_TAGS, parameterName);
+        if (declared == null || !looksConditional(declared)) {
+            return declared;
+        }
+        return PhpDocDeclaredTypeReader.typeNameFor(doc, List.of("@param"), parameterName);
+    }
+
+    private static boolean looksConditional(String declared) {
+        return declared.trim().startsWith("(") || declared.contains(" is ");
     }
 
     /**

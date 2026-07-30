@@ -11,6 +11,10 @@
 
 
 
+## 0.41.0
+
+- Read the plain `@param` when `@phpstan-param` is itself a conditional type. Real code writes the condition on both the parameter and the return, and reading the conditional as a parameter type bound no type variable at all — so nothing was inferred. Everything had been verified on hand-written fixtures, which did not have this shape.
+
 ## 0.40.0
 
 - Fix element access on a resolved call. `$xs = opOf(...)(); $xs[0]` gave the type one step back, because an unresolved type placeholder in the union stops PhpStorm from reading the element. Calls are resolved in place outside indexing, and the plural form is added alongside the generic one so the element type is reachable without losing `list`.
