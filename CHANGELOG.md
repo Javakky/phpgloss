@@ -9,6 +9,11 @@
 
 
 
+
+## 0.21.0
+
+- Point alias names in the rendered comment at the declaring class instead of at the alias. The rendered comment in the editor dispatches links through a different path than Quick Documentation and rejects the `Owner::Alias` form with "malformed URL", so only real PSI elements can be reached there. Quick Documentation keeps linking to the alias itself.
+
 ## 0.20.0
 
 - Link the alias names written in `@phpstan-type` and `@phpstan-import-type` comments themselves. PHP renders only the class after `from` as a link, leaving both the original and the aliased name as plain text. The original name points at the alias in its declaring class, the aliased name at the alias in the using class. Applies to the rendered comment in the editor and to the class's Quick Documentation.

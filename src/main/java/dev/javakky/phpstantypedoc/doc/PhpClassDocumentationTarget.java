@@ -70,7 +70,7 @@ final class PhpClassDocumentationTarget implements DocumentationTarget {
             return null;
         }
         String linked = PhpDocAliasLinker.linkAliasNames(
-                phpClass, html, new dev.javakky.phpstantypedoc.PhpStanTypeResolverFacade());
+                phpClass, html, new dev.javakky.phpstantypedoc.PhpStanTypeResolverFacade(), true);
         return DocumentationResult.documentation(linked + aliasDetails);
     }
 

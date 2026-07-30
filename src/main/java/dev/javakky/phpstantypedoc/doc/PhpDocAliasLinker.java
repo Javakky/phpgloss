@@ -26,11 +26,22 @@ final class PhpDocAliasLinker {
     private PhpDocAliasLinker() {
     }
 
-    static String linkAliasNames(PhpClass phpClass, String html, PhpStanTypeResolverFacade resolver) {
+    /**
+     * @param aliasTargets true なら alias 自身の documentation へ、false なら定義元クラスへ向ける。
+     *                     エディタ内のレンダリング表示は Quick Documentation と別の経路で
+     *                     リンクを処理し、{@code Owner::Alias} 形式を「不正な形式の URL」として
+     *                     弾く。そちらでは実在する PSI 要素にしか飛べない
+     */
+    static String linkAliasNames(
+            PhpClass phpClass,
+            String html,
+            PhpStanTypeResolverFacade resolver,
+            boolean aliasTargets
+    ) {
         if (html == null || html.isEmpty()) {
             return html;
         }
-        Map<String, String> urls = aliasUrls(phpClass, resolver);
+        Map<String, String> urls = aliasUrls(phpClass, resolver, aliasTargets);
         String result = html;
         for (Map.Entry<String, String> entry : urls.entrySet()) {
             result = replaceSpanText(result, entry.getKey(), entry.getValue());
@@ -42,7 +53,11 @@ final class PhpDocAliasLinker {
      * @return エイリアス名 → リンク URL。import は別名と元名の両方を対象にし、
      *         元名は定義元クラスを owner にしたリンクへ向ける
      */
-    private static Map<String, String> aliasUrls(PhpClass phpClass, PhpStanTypeResolverFacade resolver) {
+    private static Map<String, String> aliasUrls(
+            PhpClass phpClass,
+            PhpStanTypeResolverFacade resolver,
+            boolean aliasTargets
+    ) {
         Map<String, String> urls = new LinkedHashMap<>();
         PsiFile file = phpClass.getContainingFile();
         if (file == null || phpClass.getFQN() == null) {
@@ -56,16 +71,24 @@ final class PhpDocAliasLinker {
             return urls;
         }
         for (var alias : block.get().aliases()) {
-            urls.put(alias.aliasName(), PhpStanTypeDocumentationLink.forAlias(classFqn, alias.aliasName()));
+            urls.put(alias.aliasName(), aliasTargets
+                    ? PhpStanTypeDocumentationLink.forAlias(classFqn, alias.aliasName())
+                    : PhpStanTypeDocumentationLink.forClass(classFqn));
         }
         for (var typeImport : block.get().imports()) {
-            urls.put(typeImport.localName(),
-                    PhpStanTypeDocumentationLink.forAlias(classFqn, typeImport.localName()));
-            resolver.resolveInClass(file, classFqn, typeImport.localName())
+            String definingFqcn = resolver.resolveInClass(file, classFqn, typeImport.localName())
                     .map(PhpStanResolvedType::definingClassFqcn)
                     .filter(fqcn -> fqcn != null && !fqcn.isBlank())
-                    .ifPresent(definingFqcn -> urls.put(typeImport.originalName(),
-                            PhpStanTypeDocumentationLink.forAlias(definingFqcn, typeImport.originalName())));
+                    .orElse(null);
+            urls.put(typeImport.localName(), aliasTargets
+                    ? PhpStanTypeDocumentationLink.forAlias(classFqn, typeImport.localName())
+                    : PhpStanTypeDocumentationLink.forClass(
+                            definingFqcn == null ? classFqn : definingFqcn));
+            if (definingFqcn != null) {
+                urls.put(typeImport.originalName(), aliasTargets
+                        ? PhpStanTypeDocumentationLink.forAlias(definingFqcn, typeImport.originalName())
+                        : PhpStanTypeDocumentationLink.forClass(definingFqcn));
+            }
         }
         return urls;
     }

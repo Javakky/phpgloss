@@ -67,7 +67,7 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
         var owner = comment.getOwner();
         if (owner instanceof PhpClass phpClass) {
             return Optional.of(new AnnotatedInlineDocumentation(
-                    comment, phpClass, html -> PhpDocAliasLinker.linkAliasNames(phpClass, html, resolver)));
+                    comment, phpClass, html -> PhpDocAliasLinker.linkAliasNames(phpClass, html, resolver, false)));
         }
         Function function = owner instanceof Function ownerFunction ? ownerFunction : null;
         if (function == null || function.isClosure()) {

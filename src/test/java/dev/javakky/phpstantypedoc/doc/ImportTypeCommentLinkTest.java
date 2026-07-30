@@ -37,11 +37,12 @@ public final class ImportTypeCommentLinkTest extends BasePlatformTestCase {
         assertNotNull("クラス PHPDoc の documentation が返らない", documentation);
         String html = documentation.renderText();
         assertNotNull("レンダリング結果が null", html);
-        // 別名は利用側クラスの alias、元名は定義元クラスの alias へ向ける
+        // レンダリング表示は Owner::Alias を「不正な形式の URL」として弾くので、定義元クラスへ向ける
         assertTrue("別名がリンクになっていない: " + html,
-                html.contains("psi_element://\\App\\Service\\CreateUser::CreateUserData'>CreateUserData</a>"));
+                html.contains("psi_element://\\App\\Domain\\User'>CreateUserData</a>"));
         assertTrue("元名がリンクになっていない: " + html,
-                html.contains("psi_element://\\App\\Domain\\User::UserData'>UserData</a>"));
+                html.contains("psi_element://\\App\\Domain\\User'>UserData</a>"));
+        assertFalse("レンダリング表示に Owner::Alias 形式が残っている: " + html, html.contains("::"));
         // PHP が付けたクラスリンクを壊していない
         assertTrue("from のクラスリンクが失われた: " + html,
                 html.contains("psi_element://\\App\\Domain\\User'>User</a>"));
@@ -66,6 +67,6 @@ public final class ImportTypeCommentLinkTest extends BasePlatformTestCase {
         assertNotNull("レンダリング結果が null", html);
 
         assertTrue("宣言名がリンクになっていない: " + html,
-                html.contains("::UserData'>UserData</a>"));
+                html.contains("psi_element://\\App\\Domain\\User'>UserData</a>"));
     }
 }
