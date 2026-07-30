@@ -10,6 +10,11 @@
 
 
 
+
+## 0.23.0
+
+- Log the rendered comment HTML. The rendered view cannot be inspected through the IDE's MCP tools, so its actual output was being guessed at rather than observed.
+
 ## 0.22.0
 
 - Fix "malformed URL" when clicking a link in the rendered comment. Links there are resolved starting from the target returned by `getOwnerTarget()`, which was null for a class, so clicks fell through to the external browser. Returning the class target routes them through the link handler, and alias names in the rendered comment now navigate to the alias itself.

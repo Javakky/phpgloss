@@ -30,6 +30,9 @@ import java.util.Optional;
  * エイリアス名を追記したものを返す。
  */
 public final class PhpStanInlineDocumentationProvider implements InlineDocumentationProvider {
+    private static final com.intellij.openapi.diagnostic.Logger LOG =
+            com.intellij.openapi.diagnostic.Logger.getInstance(PhpStanInlineDocumentationProvider.class);
+
     private final PhpStanTypeResolverFacade resolver = new PhpStanTypeResolverFacade();
     private final PhpDocumentationProvider provider = new PhpDocumentationProvider();
 
@@ -105,7 +108,27 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
         @Override
         public @Nullable String renderText() {
             String html = provider.generateRenderedDoc(comment);
-            return html == null ? null : annotate.apply(html);
+            String result = html == null ? null : annotate.apply(html);
+            // 罫線モードの描画結果は MCP から取得できない。実機で何が出ているかを追うため記録する。
+            LOG.warn("PHPStan rendered doc: owner=" + owner.getName()
+                    + " kind=" + owner.getClass().getSimpleName()
+                    + " aliasLinks=" + countOccurrences(result, "phpstantypedoc")
+                    + " psiLinks=" + countOccurrences(result, "psi_element://")
+                    + " html=" + (result == null ? "null" : result));
+            return result;
+        }
+
+        private int countOccurrences(String text, String needle) {
+            if (text == null) {
+                return -1;
+            }
+            int count = 0;
+            int offset = 0;
+            while ((offset = text.indexOf(needle, offset)) >= 0) {
+                count++;
+                offset += needle.length();
+            }
+            return count;
         }
 
         /**
