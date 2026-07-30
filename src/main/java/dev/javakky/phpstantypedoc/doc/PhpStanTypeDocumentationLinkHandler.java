@@ -69,18 +69,36 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
         return resolveClass(context, aliasReference.get().ownerClassFqn());
     }
 
+    /**
+     * クラス、または名前空間へのリンクを解決する。
+     *
+     * <p>PHP が生成する documentation には名前空間へのリンク ({@code psi_element://\App\Domain\})
+     * も含まれる。この plugin の target を表示している間は platform 標準の PSI handler が働かないため、
+     * ここで面倒を見ないとクリックが「ドキュメントが見つかりません」になる。
+     */
     private @Nullable LinkResolveResult resolveClass(PsiElement context, String fqn) {
         if (fqn.contains("#")) {
             return null;
         }
-        Collection<PhpClass> classes = PhpIndex.getInstance(context.getProject()).getClassesByFQN(fqn);
-        if (classes.size() != 1) {
-            LOG.warn("PHPStan doc link: class not uniquely resolved"
-                    + " (fqn=" + fqn + ", found=" + classes.size() + ")");
-            return null;
+        PhpIndex index = PhpIndex.getInstance(context.getProject());
+        Collection<PhpClass> classes = index.getClassesByFQN(fqn);
+        if (classes.size() == 1) {
+            return LinkResolveResult.resolvedTarget(
+                    new PhpClassDocumentationTarget(classes.iterator().next(), context));
         }
-        return LinkResolveResult.resolvedTarget(
-                new PhpClassDocumentationTarget(classes.iterator().next(), context));
+        var namespace = index.getNamespacesByName(stripTrailingSeparator(fqn)).stream().findFirst();
+        if (namespace.isPresent()) {
+            return LinkResolveResult.resolvedTarget(
+                    new PhpNamespaceDocumentationTarget(namespace.get(), context));
+        }
+        LOG.warn("PHPStan doc link: neither class nor namespace resolved"
+                + " (fqn=" + fqn + ", classes=" + classes.size() + ")");
+        return null;
+    }
+
+    private String stripTrailingSeparator(String fqn) {
+        String trimmed = fqn.endsWith("\\") ? fqn.substring(0, fqn.length() - 1) : fqn;
+        return trimmed.startsWith("\\") ? trimmed.substring(1) : trimmed;
     }
 
     private @Nullable LinkResolveResult resolveAlias(
@@ -136,6 +154,9 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
         }
         if (target instanceof PhpFunctionDocumentationTarget functionTarget) {
             return functionTarget.contextElement();
+        }
+        if (target instanceof PhpNamespaceDocumentationTarget namespaceTarget) {
+            return namespaceTarget.contextElement();
         }
         return null;
     }

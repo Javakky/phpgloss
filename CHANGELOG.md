@@ -5,6 +5,11 @@
 
 
 
+
+## 0.17.0
+
+- Resolve namespace links inside this plugin's documentation. PHP emits links such as `psi_element://\App\Domain\` in its generated documentation, and while this plugin's target is shown the platform's own PSI handler stays out of the way, so those clicks ended in "documentation not found".
+
 ## 0.16.0
 
 - Navigate from an alias name to documentation for that alias itself. The platform's link dispatch calls every `DocumentationLinkHandler` without inspecting the URL, so a custom scheme does reach the handler — the earlier attempt failed for a different reason. A `psi_element://` URL cannot carry the alias, since the platform resolves that scheme as a PSI element and a fragment makes resolution fail.
