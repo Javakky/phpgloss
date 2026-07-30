@@ -107,8 +107,8 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
             LOG.warn("PHPStan doc link: containing file not available for alias " + reference.aliasName());
             return null;
         }
-        Optional<PhpStanResolvedType> resolved =
-                resolver.resolveInClass(file, reference.ownerClassFqn(), reference.aliasName());
+        Optional<PhpStanResolvedType> resolved = resolveInAnyFile(
+                context, file, reference.ownerClassFqn(), reference.aliasName());
         if (resolved.isEmpty()) {
             LOG.warn("PHPStan doc link: alias not resolvable in class"
                     + " (owner=" + reference.ownerClassFqn() + ", alias=" + reference.aliasName()
@@ -125,6 +125,36 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
         // リンク由来の target は範囲から復元できないので hard pointer で保持する
         return LinkResolveResult.resolvedTarget(
                 new PhpStanTypeDocumentationTarget(file, aliasTarget, false));
+    }
+
+    /**
+     * owner クラスが現在のファイルに無い場合 (元名のリンクなど) は、{@link PhpIndex} で
+     * そのクラスのファイルを引いてから解決する。
+     */
+    private Optional<PhpStanResolvedType> resolveInAnyFile(
+            PsiElement context,
+            PsiFile currentFile,
+            String ownerClassFqn,
+            String aliasName
+    ) {
+        Optional<PhpStanResolvedType> inCurrentFile =
+                resolver.resolveInClass(currentFile, ownerClassFqn, aliasName);
+        if (inCurrentFile.isPresent()) {
+            return inCurrentFile;
+        }
+        String normalized = ownerClassFqn.startsWith("\\") ? ownerClassFqn : "\\" + ownerClassFqn;
+        for (PhpClass phpClass : PhpIndex.getInstance(context.getProject()).getClassesByFQN(normalized)) {
+            PsiFile ownerFile = phpClass.getContainingFile();
+            if (ownerFile == null) {
+                continue;
+            }
+            Optional<PhpStanResolvedType> resolved =
+                    resolver.resolveInClass(ownerFile, ownerClassFqn, aliasName);
+            if (resolved.isPresent()) {
+                return resolved;
+            }
+        }
+        return Optional.empty();
     }
 
     private com.intellij.openapi.vfs.VirtualFile definitionFile(

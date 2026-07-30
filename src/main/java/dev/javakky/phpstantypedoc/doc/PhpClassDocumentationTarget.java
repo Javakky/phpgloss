@@ -66,7 +66,12 @@ final class PhpClassDocumentationTarget implements DocumentationTarget {
     @Override
     public @Nullable DocumentationResult computeDocumentation() {
         String html = provider.generateDoc(phpClass, sourceElement);
-        return html == null ? null : DocumentationResult.documentation(html + aliasDetails);
+        if (html == null) {
+            return null;
+        }
+        String linked = PhpDocAliasLinker.linkAliasNames(
+                phpClass, html, new dev.javakky.phpstantypedoc.PhpStanTypeResolverFacade());
+        return DocumentationResult.documentation(linked + aliasDetails);
     }
 
     PsiElement contextElement() {

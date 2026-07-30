@@ -10,6 +10,8 @@ import com.intellij.psi.util.PsiTreeUtil;
 import com.jetbrains.php.lang.documentation.PhpDocumentationProvider;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
 import com.jetbrains.php.lang.psi.elements.Function;
+import com.jetbrains.php.lang.psi.elements.PhpClass;
+import com.jetbrains.php.lang.psi.elements.PhpNamedElement;
 import dev.javakky.phpstantypedoc.PhpStanTypeResolverFacade;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -62,27 +64,32 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
     private Optional<InlineDocumentation> annotatedDocumentation(PsiFile file, PhpDocComment comment) {
         // 所有者は PsiDocCommentBase#getOwner で取る。PHPDoc が所有者の子か前の兄弟かは
         // 要素の種類で変わるため、PSI を自分で辿らない。
-        Function function = comment.getOwner() instanceof Function owner ? owner : null;
+        var owner = comment.getOwner();
+        if (owner instanceof PhpClass phpClass) {
+            return Optional.of(new AnnotatedInlineDocumentation(
+                    comment, phpClass, html -> PhpDocAliasLinker.linkAliasNames(phpClass, html, resolver)));
+        }
+        Function function = owner instanceof Function ownerFunction ? ownerFunction : null;
         if (function == null || function.isClosure()) {
             return Optional.empty();
         }
         return PhpDocAliasAnnotator.of(file, function, resolver)
-                .map(annotator -> new AnnotatedInlineDocumentation(comment, function, annotator));
+                .map(annotator -> new AnnotatedInlineDocumentation(comment, function, annotator::annotate));
     }
 
     private final class AnnotatedInlineDocumentation implements InlineDocumentation {
         private final PsiDocCommentBase comment;
-        private final Function function;
-        private final PhpDocAliasAnnotator annotator;
+        private final PhpNamedElement owner;
+        private final java.util.function.UnaryOperator<String> annotate;
 
         private AnnotatedInlineDocumentation(
                 PsiDocCommentBase comment,
-                Function function,
-                PhpDocAliasAnnotator annotator
+                PhpNamedElement owner,
+                java.util.function.UnaryOperator<String> annotate
         ) {
             this.comment = comment;
-            this.function = function;
-            this.annotator = annotator;
+            this.owner = owner;
+            this.annotate = annotate;
         }
 
         @Override
@@ -92,20 +99,23 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
 
         @Override
         public @Nullable TextRange getDocumentationOwnerRange() {
-            return function.getTextRange();
+            return owner.getTextRange();
         }
 
         @Override
         public @Nullable String renderText() {
             String html = provider.generateRenderedDoc(comment);
-            return html == null ? null : annotator.annotate(html);
+            return html == null ? null : annotate.apply(html);
         }
 
         @Override
         public @Nullable DocumentationTarget getOwnerTarget() {
-            return PhpFunctionDocumentationTarget
-                    .at(function.getContainingFile(), function.getTextOffset(), resolver)
-                    .orElse(null);
+            if (owner instanceof Function function) {
+                return PhpFunctionDocumentationTarget
+                        .at(function.getContainingFile(), function.getTextOffset(), resolver)
+                        .orElse(null);
+            }
+            return null;
         }
     }
 }

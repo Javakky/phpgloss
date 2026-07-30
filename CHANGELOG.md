@@ -8,6 +8,12 @@
 
 
 
+
+## 0.20.0
+
+- Link the alias names written in `@phpstan-type` and `@phpstan-import-type` comments themselves. PHP renders only the class after `from` as a link, leaving both the original and the aliased name as plain text. The original name points at the alias in its declaring class, the aliased name at the alias in the using class. Applies to the rendered comment in the editor and to the class's Quick Documentation.
+- Resolve an alias whose owning class lives in another file, which the original name of an import requires.
+
 ## 0.19.0
 
 - Fix alias links opening nothing. The link handler resolved correctly, but the returned target was held through a pointer that restores itself by re-resolving a saved text range. For a link-created target that range points at the referring element (a whole method), where no alias resolves, so the pointer produced null and the documentation was discarded. Link-created targets are now held directly.
