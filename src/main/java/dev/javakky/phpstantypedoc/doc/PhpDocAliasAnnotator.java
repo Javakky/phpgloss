@@ -25,10 +25,16 @@ public final class PhpDocAliasAnnotator {
 
     private final List<ParameterAlias> parameterAliases;
     private final ResolvedAlias returnAlias;
+    private final String ownerClassFqn;
 
-    private PhpDocAliasAnnotator(List<ParameterAlias> parameterAliases, ResolvedAlias returnAlias) {
+    private PhpDocAliasAnnotator(
+            List<ParameterAlias> parameterAliases,
+            ResolvedAlias returnAlias,
+            String ownerClassFqn
+    ) {
         this.parameterAliases = parameterAliases;
         this.returnAlias = returnAlias;
+        this.ownerClassFqn = ownerClassFqn;
     }
 
     /**
@@ -57,7 +63,8 @@ public final class PhpDocAliasAnnotator {
         if (parameters.isEmpty() && resolvedReturn == null) {
             return Optional.empty();
         }
-        return Optional.of(new PhpDocAliasAnnotator(List.copyOf(parameters), resolvedReturn));
+        return Optional.of(new PhpDocAliasAnnotator(
+                List.copyOf(parameters), resolvedReturn, ownerClass.getFQN()));
     }
 
     private static Optional<ResolvedAlias> resolve(
@@ -74,23 +81,27 @@ public final class PhpDocAliasAnnotator {
     }
 
     public String annotate(String html) {
-        String result = addParameterAliases(html);
-        if (returnAlias == null) {
-            return result;
-        }
-        int returns = result.indexOf(RETURNS_LABEL);
-        if (returns < 0) {
-            return result;
-        }
-        int labelCellEnd = result.indexOf("</td>", returns);
-        int valueCellEnd = labelCellEnd < 0 ? -1 : result.indexOf("</td>", labelCellEnd + 5);
-        if (valueCellEnd < 0) {
-            return result;
-        }
-        return result.substring(0, valueCellEnd)
-                + aliasLink(returnAlias)
-                + result.substring(valueCellEnd);
+        return addReturnAlias(addParameterAliases(html));
     }
+
+    private String addReturnAlias(String html) {
+        if (returnAlias == null) {
+            return html;
+        }
+        int returns = html.indexOf(RETURNS_LABEL);
+        if (returns < 0) {
+            return html;
+        }
+        int labelCellEnd = html.indexOf("</td>", returns);
+        int valueCellEnd = labelCellEnd < 0 ? -1 : html.indexOf("</td>", labelCellEnd + 5);
+        if (valueCellEnd < 0) {
+            return html;
+        }
+        return html.substring(0, valueCellEnd)
+                + aliasName(returnAlias)
+                + html.substring(valueCellEnd);
+    }
+
 
     private String addParameterAliases(String html) {
         int parameters = html.indexOf(PARAMETERS_LABEL);
@@ -113,20 +124,16 @@ public final class PhpDocAliasAnnotator {
             }
             int insertion = variableEnd + marker.length();
             section = section.substring(0, insertion)
-                    + aliasLink(parameterAlias.alias())
+                    + aliasName(parameterAlias.alias())
                     + section.substring(insertion);
         }
         return html.substring(0, parameters) + section + html.substring(sectionEnd);
     }
 
-    /** alias 名は定義元クラスへのリンクにする。飛び先の PHPDoc に `@phpstan-type` の定義がある。 */
-    private String aliasLink(ResolvedAlias alias) {
+    /** エイリアス名をエイリアス自身の documentation へのリンクにする。 */
+    private String aliasName(ResolvedAlias alias) {
         String name = PhpStanTypeHtmlRenderer.escape(alias.typeName());
-        String definingClassFqcn = alias.resolvedType().definingClassFqcn();
-        if (definingClassFqcn == null || definingClassFqcn.isBlank()) {
-            return "&nbsp;<code>(" + name + ")</code>";
-        }
-        String url = PhpStanTypeDocumentationLink.forClass(definingClassFqcn);
+        String url = PhpStanTypeDocumentationLink.forAlias(ownerClassFqn, alias.typeName());
         return "&nbsp;<code>(<a href='" + url + "'>" + name + "</a>)</code>";
     }
 

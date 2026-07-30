@@ -2,6 +2,12 @@
 
 
 
+
+## 0.14.0
+
+- Make the alias name navigate to the alias itself rather than to its declaring class. The link handler now logs where resolution fails and falls back to the owner class instead of returning nothing, so a failure degrades to the previous behaviour rather than showing "documentation not found".
+- Find the rendered PHPDoc by walking up from the range start rather than requiring an exact range match, and take the owner from `PsiDocCommentBase#getOwner` instead of walking siblings.
+
 ## 0.13.0
 
 - Show alias names in the rendered PHPDoc shown inside the editor, not just in Quick Documentation. Rendered comments come from `inlineDocumentationProvider`, a different extension point that the PHP plugin does not implement, so the alias names were missing there. Documents without a resolvable alias are left to the platform's own rendering.

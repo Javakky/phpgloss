@@ -1,48 +1,126 @@
 package dev.javakky.phpstantypedoc.doc;
 
-import com.intellij.psi.PsiElement;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.platform.backend.documentation.DocumentationLinkHandler;
 import com.intellij.platform.backend.documentation.DocumentationTarget;
 import com.intellij.platform.backend.documentation.LinkResolveResult;
+import com.intellij.psi.PsiElement;
+import com.intellij.psi.PsiFile;
 import com.jetbrains.php.PhpIndex;
 import com.jetbrains.php.lang.psi.elements.PhpClass;
+import dev.javakky.phpstantypedoc.PhpStanTypeResolverFacade;
+import dev.javakky.phpstantypedoc.ResolvedPhpStanTypeTarget;
+import dev.javakky.phpstantypedoc.model.PhpStanResolvedType;
+import dev.javakky.phpstantypedoc.model.SourceRange;
+import dev.javakky.phpstantypedoc.parser.DetectedTypeReference;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.Collection;
+import java.util.Optional;
 
 /**
- * {@link PhpStanTypeDocumentationTarget} 内の {@code psi_element://} リンクを解決する。
+ * この plugin の documentation target 内のリンクを解決する。
  *
  * <p>platform 標準の PSI link handler は、表示中の target が
  * {@code PsiElementDocumentationTarget} の場合だけ処理する。この plugin は独自 target を返すため、
- * 同じ URL 形式でも標準 handler からは無視される。この plugin が生成するリンクは PHP クラスの
- * FQN だけなので {@link PhpIndex} で解決し、PHP の documentation provider を使う独自 target へ
- * 変換する。遷移後の PHP クラス documentation にある同形式のリンクもこの handler が処理する。
+ * 同じ {@code psi_element://} 形式でも標準 handler からは無視され、ここで処理する。
+ *
+ * <p>リンクは 2 種類ある。クラス FQN だけのものはそのクラスの documentation へ、
+ * alias 名を fragment に持つものはエイリアス自身の documentation へ遷移させる。
+ * どこで解決に失敗したかを実機で追えるよう、失敗経路にはログを残す。
  */
 public final class PhpStanTypeDocumentationLinkHandler implements DocumentationLinkHandler {
+    private static final Logger LOG = Logger.getInstance(PhpStanTypeDocumentationLinkHandler.class);
+
+    private final PhpStanTypeResolverFacade resolver = new PhpStanTypeResolverFacade();
+
     @Override
     public @Nullable LinkResolveResult resolveLink(
             @NotNull DocumentationTarget target,
             @NotNull String url
     ) {
-        PsiElement context = contextElement(target);
-        if (context == null || !url.startsWith(PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL)) {
+        if (!url.startsWith(PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL)) {
             return null;
         }
-        String fqn = url.substring(PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL.length());
+        PsiElement context = contextElement(target);
+        if (context == null) {
+            LOG.warn("PHPStan doc link: context element not available"
+                    + " (target=" + target.getClass().getSimpleName() + ", url=" + url + ")");
+            return null;
+        }
+        var aliasReference = PhpStanTypeDocumentationLink.parseAlias(url);
+        if (aliasReference.isEmpty()) {
+            return resolveClass(context, url.substring(
+                    PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL.length()));
+        }
+        LinkResolveResult alias = resolveAlias(context, aliasReference.get());
+        if (alias != null) {
+            return alias;
+        }
+        // エイリアスとして解決できないときは owner クラスへ送る。何も返さないと
+        // 「ドキュメントが見つかりません」になり、リンクが死ぬだけになるため。
+        LOG.warn("PHPStan doc link: alias not resolved, falling back to owner class (url=" + url + ")");
+        return resolveClass(context, aliasReference.get().ownerClassFqn());
+    }
+
+    private @Nullable LinkResolveResult resolveClass(PsiElement context, String fqn) {
         if (fqn.contains("#")) {
             return null;
         }
-        Collection<PhpClass> classes =
-                PhpIndex.getInstance(context.getProject()).getClassesByFQN(fqn);
+        Collection<PhpClass> classes = PhpIndex.getInstance(context.getProject()).getClassesByFQN(fqn);
         if (classes.size() != 1) {
+            LOG.warn("PHPStan doc link: class not uniquely resolved"
+                    + " (fqn=" + fqn + ", found=" + classes.size() + ")");
             return null;
         }
-        DocumentationTarget resolved = new PhpClassDocumentationTarget(classes.iterator().next(), context);
-        return LinkResolveResult.resolvedTarget(resolved);
+        return LinkResolveResult.resolvedTarget(
+                new PhpClassDocumentationTarget(classes.iterator().next(), context));
     }
 
+    private @Nullable LinkResolveResult resolveAlias(
+            PsiElement context,
+            PhpStanTypeDocumentationLink.AliasReference reference
+    ) {
+        PsiFile file = context.getContainingFile();
+        if (file == null) {
+            LOG.warn("PHPStan doc link: containing file not available for alias " + reference.aliasName());
+            return null;
+        }
+        Optional<PhpStanResolvedType> resolved =
+                resolver.resolveInClass(file, reference.ownerClassFqn(), reference.aliasName());
+        if (resolved.isEmpty()) {
+            LOG.warn("PHPStan doc link: alias not resolvable in class"
+                    + " (owner=" + reference.ownerClassFqn() + ", alias=" + reference.aliasName()
+                    + ", file=" + file.getName() + ")");
+            return null;
+        }
+        SourceRange contextRange = new SourceRange(
+                context.getTextRange().getStartOffset(), context.getTextRange().getEndOffset());
+        var aliasTarget = new ResolvedPhpStanTypeTarget(
+                resolved.get(),
+                new DetectedTypeReference(reference.aliasName(), contextRange),
+                definitionFile(context, resolved.get())
+        );
+        return LinkResolveResult.resolvedTarget(new PhpStanTypeDocumentationTarget(file, aliasTarget));
+    }
+
+    private com.intellij.openapi.vfs.VirtualFile definitionFile(
+            PsiElement context,
+            PhpStanResolvedType resolved
+    ) {
+        String definingClassFqcn = resolved.definingClassFqcn();
+        if (definingClassFqcn != null) {
+            String normalized = definingClassFqcn.startsWith("\\")
+                    ? definingClassFqcn : "\\" + definingClassFqcn;
+            Collection<PhpClass> classes =
+                    PhpIndex.getInstance(context.getProject()).getClassesByFQN(normalized);
+            if (classes.size() == 1) {
+                return classes.iterator().next().getContainingFile().getVirtualFile();
+            }
+        }
+        return context.getContainingFile().getVirtualFile();
+    }
 
     private PsiElement contextElement(DocumentationTarget target) {
         if (target instanceof PhpStanTypeDocumentationTarget phpStanTarget) {

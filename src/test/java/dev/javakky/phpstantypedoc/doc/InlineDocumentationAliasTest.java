@@ -44,10 +44,10 @@ public final class InlineDocumentationAliasTest extends BasePlatformTestCase {
         assertNotNull("レンダリング表示の documentation が返らない", documentation);
         String html = documentation.renderText();
         assertNotNull("レンダリング結果が null", html);
-        assertTrue("Parameters に alias が出ていない: " + html,
-                html.contains("psi_element://\\App\\User'>CreateUserData</a>"));
-        assertTrue("Returns にも alias が出ていない: " + html,
+        assertTrue("Parameters / Returns に alias 名が出ていない: " + html,
                 occurrences(html, ">CreateUserData</a>") >= 2);
+        assertTrue("alias link が生成されていない: " + html,
+                html.contains("#phpstan-type=CreateUserData"));
     }
 
     public void testLeavesDocsWithoutAliasesToThePlatform() {

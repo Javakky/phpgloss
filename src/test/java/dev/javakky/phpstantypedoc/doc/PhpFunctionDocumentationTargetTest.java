@@ -54,15 +54,13 @@ public final class PhpFunctionDocumentationTargetTest extends BasePlatformTestCa
                 html.contains(">CreateUserData</a>"));
         assertTrue("複数 parameter の alias が表示されていない: " + html,
                 html.contains(">LocalData</a>"));
-        // alias 名は定義元クラスへのリンクにする。import した CreateUserData の定義元は App\\User
-        assertTrue("import した alias のリンク先が定義元クラスでない: " + html,
-                html.contains("psi_element://\\App\\User'>CreateUserData</a>"));
-        // 同一ファイルで宣言された LocalData の定義元は App\\LocalTypes
-        assertTrue("ローカル宣言 alias のリンク先が定義元クラスでない: " + html,
-                html.contains("psi_element://\\App\\LocalTypes'>LocalData</a>"));
         assertTrue("return alias が表示されていない: " + html,
                 occurrences(html, ">CreateUserData</a>") >= 2);
-        assertFalse("fragment 付きリンクが残っている: " + html, html.contains("#phpstan-type="));
+        // alias 名はエイリアス自身の documentation へのリンクにする
+        assertTrue("alias link が生成されていない: " + html,
+                html.contains("psi_element://\\App\\CreateUser#phpstan-type=CreateUserData"));
+        assertFalse("通常型まで alias link になっている: " + html,
+                html.contains("#phpstan-type=string"));
     }
 
     public void testResolvesAliasLinkFromFunctionDocumentation() {
@@ -71,12 +69,17 @@ public final class PhpFunctionDocumentationTargetTest extends BasePlatformTestCa
         var source = new PhpStanTypeDocumentationTargetProvider()
                 .documentationTargets(file, offset).getFirst();
 
-        var result = new PhpStanTypeDocumentationLinkHandler().resolveLink(
+        var alias = new PhpStanTypeDocumentationLinkHandler().resolveLink(
+                source,
+                "psi_element://\\App\\CreateUser#phpstan-type=CreateUserData"
+        );
+        assertNotNull("function documentation の alias link を解決できていない", alias);
+
+        var classLink = new PhpStanTypeDocumentationLinkHandler().resolveLink(
                 source,
                 "psi_element://\\App\\User"
         );
-
-        assertNotNull("function documentation のクラスリンクを解決できていない", result);
+        assertNotNull("function documentation のクラスリンクを解決できていない", classLink);
     }
 
     public void testLeavesFunctionsWithoutResolvedAliasesToPhpProvider() {

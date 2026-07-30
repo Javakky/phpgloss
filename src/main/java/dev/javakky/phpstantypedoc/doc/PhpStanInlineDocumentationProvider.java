@@ -48,8 +48,10 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
         if (file == null || textRange == null) {
             return null;
         }
-        var comment = PsiTreeUtil.findElementOfClassAtRange(
-                file, textRange.getStartOffset(), textRange.getEndOffset(), PhpDocComment.class);
+        // findElementOfClassAtRange は範囲がちょうど一致する要素しか返さない。platform が渡す
+        // 範囲は PHPDoc の範囲と一致するとは限らないので、開始位置から親を辿る。
+        var element = file.findElementAt(textRange.getStartOffset());
+        var comment = PsiTreeUtil.getParentOfType(element, PhpDocComment.class, false);
         return comment == null ? null : annotatedDocumentation(file, comment).orElse(null);
     }
 
@@ -58,7 +60,9 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
      *         解決できないときは何も返さず、platform の互換実装が出す PHP 標準の表示に任せる
      */
     private Optional<InlineDocumentation> annotatedDocumentation(PsiFile file, PhpDocComment comment) {
-        Function function = PsiTreeUtil.getNextSiblingOfType(comment, Function.class);
+        // 所有者は PsiDocCommentBase#getOwner で取る。PHPDoc が所有者の子か前の兄弟かは
+        // 要素の種類で変わるため、PSI を自分で辿らない。
+        Function function = comment.getOwner() instanceof Function owner ? owner : null;
         if (function == null || function.isClosure()) {
             return Optional.empty();
         }
