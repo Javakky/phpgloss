@@ -11,6 +11,12 @@
 
 
 
+## 0.34.0
+
+- Carry the upstream English wording for every keyword, taken from the one-line class docblocks in Psalm's `Type\Atomic\T*.php` (matched to keywords through `Atomic::create()`) and from PHPStan's accessory types. Where no upstream sentence exists the English is written here.
+- Show the description in the IDE's language: Japanese when the UI is Japanese, the English otherwise.
+- Write the Japanese as complete sentences. Trailing-off and noun-stopped endings leave the reader to supply the verb; a test rejects them.
+
 ## 0.33.0
 
 - Treat a word as a keyword only where a type is actually written. Being inside a PHPDoc is not enough: prose mentions `list`, and `@phpstan-import-type ... as X` puts `as` there too.

@@ -21,6 +21,7 @@ import java.util.Set;
 public final class PhpStanTypeKeywords {
     private static final String RESOURCE = "/dev/javakky/phpstantypedoc/type-keywords.md";
     private static final String TOOLS_PREFIX = "tools:";
+    private static final String ENGLISH_PREFIX = "en:";
 
     private static final Map<String, PhpStanTypeKeyword> KEYWORDS = load();
 
@@ -68,15 +69,21 @@ public final class PhpStanTypeKeywords {
             return Optional.empty();
         }
         List<String> tools = List.of();
-        List<String> description = new ArrayList<>();
+        String english = "";
+        List<String> japanese = new ArrayList<>();
         for (String line : lines.subList(1, lines.size())) {
             if (line.startsWith(TOOLS_PREFIX)) {
                 tools = List.of(line.substring(TOOLS_PREFIX.length()).trim().split(",\\s*"));
-                continue;
+            } else if (line.startsWith(ENGLISH_PREFIX)) {
+                english = line.substring(ENGLISH_PREFIX.length()).trim();
+            } else {
+                japanese.add(line);
             }
-            description.add(line);
         }
-        String text = String.join("\n", description).strip();
-        return text.isEmpty() ? Optional.empty() : Optional.of(new PhpStanTypeKeyword(name, tools, text));
+        String text = String.join("\n", japanese).strip();
+        if (text.isEmpty() && english.isEmpty()) {
+            return Optional.empty();
+        }
+        return Optional.of(new PhpStanTypeKeyword(name, tools, english, text));
     }
 }

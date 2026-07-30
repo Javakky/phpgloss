@@ -1,5 +1,6 @@
 package dev.javakky.phpstantypedoc.doc;
 
+import com.intellij.DynamicBundle;
 import com.intellij.lang.documentation.DocumentationMarkup;
 import com.intellij.model.Pointer;
 import com.intellij.openapi.fileEditor.OpenFileDescriptor;
@@ -55,7 +56,19 @@ final class PhpStanKeywordDocumentationTarget implements DocumentationTarget {
 
     @Override
     public @Nullable String computeDocumentationHint() {
-        return keyword.description();
+        return description();
+    }
+
+    /**
+     * 表示は IDE の言語に合わせる。原文の出どころは読み手に関係しないので出さない。
+     */
+    private String description() {
+        return keyword.description(DynamicBundle.getLocale());
+    }
+
+    private boolean japaneseUi() {
+        return java.util.Locale.JAPANESE.getLanguage()
+                .equals(DynamicBundle.getLocale().getLanguage());
     }
 
     @Override
@@ -65,11 +78,11 @@ final class PhpStanKeywordDocumentationTarget implements DocumentationTarget {
                 .append("<code>").append(keyword.name()).append("</code>")
                 .append(DocumentationMarkup.DEFINITION_END);
         html.append(DocumentationMarkup.CONTENT_START)
-                .append(keyword.description().replace("\n", "<br>"))
+                .append(description().replace("\n", "<br>"))
                 .append(DocumentationMarkup.CONTENT_END);
         html.append(DocumentationMarkup.SECTIONS_START)
-                .append(section("対応", String.join(", ", keyword.tools())))
-                .append(section("定義", definitionText()))
+                .append(section(japaneseUi() ? "対応" : "Tools", String.join(", ", keyword.tools())))
+                .append(section(japaneseUi() ? "定義" : "Defined in", definitionText()))
                 .append(DocumentationMarkup.SECTIONS_END);
         return DocumentationResult.documentation(html.toString());
     }

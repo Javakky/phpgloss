@@ -116,7 +116,10 @@ public final class TypeKeywordLinkTest extends BasePlatformTestCase {
         assertFalse("キーワードの documentation が返らない", targets.isEmpty());
         String html = targets.getFirst().computeDocumentation().toString();
         assertTrue("キーワードの説明が出ていない: " + html, html.contains("non-empty-list"));
-        assertTrue("説明本文が出ていない: " + html, html.contains("空でない"));
+        String expected = dev.javakky.phpstantypedoc.keyword.PhpStanTypeKeywords.find("non-empty-list")
+                .orElseThrow()
+                .description(com.intellij.DynamicBundle.getLocale());
+        assertTrue("説明本文が出ていない: " + html, html.contains(expected));
     }
 
     /**
