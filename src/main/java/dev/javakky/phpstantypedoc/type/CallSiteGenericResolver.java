@@ -220,7 +220,7 @@ final class CallSiteGenericResolver {
         Map<String, String> bindings = TemplateUnification.empty();
         bindings.putAll(seed);
         for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
-            String declared = declaredParamOf(doc, parameters[i].getName());
+            String declared = declaredParamOf(doc, parameters, arguments, parameters[i].getName());
             String signature = arguments.get(i).signature();
             if (declared == null || signature.isBlank()) {
                 continue;
@@ -245,20 +245,62 @@ final class CallSiteGenericResolver {
     }
 
     /**
-     * 引数の宣言を読む。`@phpstan-param` にも条件型が書かれていることがあり
-     * (実物の `init` がそう)、それでは型変数を決められないので素の `@param` に落とす。
+     * 引数の宣言を読む。
+     *
+     * <p>`@phpstan-param` にも条件型が書かれていることがある (実物の `init` がそう)。条件式は
+     * 「どの型を受け付けるか」を書いたもので、そのままでは型変数を決める形になっていない。
+     * 戻り値と同じ実引数で畳んでから使い、畳めないときだけ素の `@param` に落とす。
      */
-    private static @Nullable String declaredParamOf(PhpDocComment doc, String parameterName) {
+    private static @Nullable String declaredParamOf(
+            PhpDocComment doc,
+            Parameter[] parameters,
+            List<Argument> arguments,
+            String parameterName
+    ) {
+        String raw = rawParamOf(doc, parameterName);
+        if (raw != null && ConditionalReturnType.parse(raw) != null) {
+            String folded = ConditionalReturnType.resolve(raw, subject -> argumentTextOf(subject, parameters, arguments));
+            if (folded != null) {
+                return folded;
+            }
+        }
         String declared = PhpDocDeclaredTypeReader.typeNameFor(
                 doc, PhpDocDeclaredTypeReader.PARAM_TAGS, parameterName);
-        if (declared == null || !looksConditional(declared)) {
+        if (declared == null || !(declared.trim().startsWith("(") || declared.contains(" is "))) {
             return declared;
         }
         return PhpDocDeclaredTypeReader.typeNameFor(doc, List.of("@param"), parameterName);
     }
 
-    private static boolean looksConditional(String declared) {
-        return declared.trim().startsWith("(") || declared.contains(" is ");
+    /**
+     * `@phpstan-param` に書かれた本文をそのまま読む。条件型は {@code PhpDocType} にならない。
+     */
+    private static @Nullable String rawParamOf(PhpDocComment doc, String parameterName) {
+        for (String tag : List.of("@phpstan-param", "@psalm-param")) {
+            for (var element : doc.getTagElementsByName(tag)) {
+                String text = element.getText();
+                if (!text.contains("$" + parameterName)) {
+                    continue;
+                }
+                String body = stripDocDecoration(text.substring(text.indexOf(tag) + tag.length()));
+                int variable = body.indexOf("$" + parameterName);
+                String type = (variable < 0 ? body : body.substring(0, variable)).trim();
+                if (!type.isEmpty()) {
+                    return type;
+                }
+            }
+        }
+        return null;
+    }
+
+    private static @Nullable String argumentTextOf(
+            String subject, Parameter[] parameters, List<Argument> arguments) {
+        for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
+            if (subject.equals(parameters[i].getName())) {
+                return arguments.get(i).text();
+            }
+        }
+        return null;
     }
 
     /**
@@ -273,14 +315,7 @@ final class CallSiteGenericResolver {
         if (ConditionalReturnType.parse(raw) == null) {
             return PhpDocDeclaredTypeReader.typeNameFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
         }
-        return ConditionalReturnType.resolve(raw, subject -> {
-            for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
-                if (subject.equals(parameters[i].getName())) {
-                    return arguments.get(i).text();
-                }
-            }
-            return null;
-        });
+        return ConditionalReturnType.resolve(raw, subject -> argumentTextOf(subject, parameters, arguments));
     }
 
     /**

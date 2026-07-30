@@ -11,6 +11,10 @@
 
 
 
+## 0.42.0
+
+- Fold a conditional `@phpstan-param` against the same arguments before matching it, rather than falling back to the plain `@param`. A condition states which type is accepted, not the shape that determines the type variable, so reading it as-is bound nothing. Folding it first also works when only the conditional parameter is written.
+
 ## 0.41.0
 
 - Read the plain `@param` when `@phpstan-param` is itself a conditional type. Real code writes the condition on both the parameter and the return, and reading the conditional as a parameter type bound no type variable at all — so nothing was inferred. Everything had been verified on hand-written fixtures, which did not have this shape.

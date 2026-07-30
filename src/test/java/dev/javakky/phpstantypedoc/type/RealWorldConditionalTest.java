@@ -67,6 +67,22 @@ public final class RealWorldConditionalTest extends BasePlatformTestCase {
                 parts.stream().anyMatch(t -> t.startsWith("list<")));
     }
 
+    /**
+     * 素の `@param` が無く `@phpstan-param` の条件型しか無い場合も、同じ実引数で畳めば
+     * 型変数を決められる。`@param` へ落とすだけの実装ではここが解けない。
+     */
+    public void testResolvesWhenOnlyTheConditionalParamIsWritten() {
+        String source = SOURCE.replace("             * @param list<V>|array<K, V> $input 対象の配列\n", "");
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, source);
+        Variable variable = PsiTreeUtil.findChildrenOfType(file, Variable.class).stream()
+                .filter(v -> "asList".equals(v.getName())).findFirst().orElseThrow();
+        var parts = ((PhpTypedElement) variable).getType().global(getProject())
+                .getTypesWithParametrisedParts();
+
+        assertTrue("条件型の @phpstan-param から型変数を決められていない: " + parts,
+                parts.stream().anyMatch(t -> t.startsWith("list<")));
+    }
+
     public void testDistinguishesTheTwoModes() {
         var asList = typeOf("asList");
         var asAssoc = typeOf("asAssoc");
