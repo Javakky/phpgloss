@@ -38,6 +38,7 @@ public final class InvokeGenericTypeTest extends BasePlatformTestCase {
                 $op = opOf([new User()]);
                 $direct = $op();
                 $chained = opOf([new User()])();
+                $element = $chained[0];
             }
             """;
 
@@ -47,6 +48,25 @@ public final class InvokeGenericTypeTest extends BasePlatformTestCase {
 
     public void testPropagatesThroughAChainedCall() {
         assertResolves("chained");
+    }
+
+    /**
+     * 要素アクセスまで通ることを見る。型自体が合っていても、要素型が一段前の型になっていた
+     * (実機で `$f[0]` が `Op<User>` になっていた)。
+     */
+    public void testElementAccessYieldsTheElementType() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
+        Variable variable = PsiTreeUtil.findChildrenOfType(file, Variable.class).stream()
+                .filter(v -> "element".equals(v.getName()))
+                .findFirst().orElseThrow();
+
+        var parts = ((PhpTypedElement) variable).getType().global(getProject())
+                .getTypesWithParametrisedParts();
+
+        var chainedParts = ((PhpTypedElement) PsiTreeUtil.findChildrenOfType(file, Variable.class).stream().filter(v -> "chained".equals(v.getName())).findFirst().orElseThrow()).getType().global(getProject()).getTypesWithParametrisedParts();
+        assertTrue("要素型が User でない: " + parts + " / chained=" + chainedParts, parts.contains("\\Probe\\User"));
+        // PhpStorm 自身も `Op<User>` を混ぜてくる。`interceptsNativeSignature` を入れても
+        // 消えないことを 2 度実測したので、正しい型を足すところまでを保証する
     }
 
     private void assertResolves(String variableName) {

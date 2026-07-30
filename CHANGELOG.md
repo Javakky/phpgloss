@@ -11,6 +11,10 @@
 
 
 
+## 0.40.0
+
+- Fix element access on a resolved call. `$xs = opOf(...)(); $xs[0]` gave the type one step back, because an unresolved type placeholder in the union stops PhpStorm from reading the element. Calls are resolved in place outside indexing, and the plural form is added alongside the generic one so the element type is reachable without losing `list`.
+
 ## 0.39.0
 
 - Decide a condition written on the shape of a value (`$input is list<V>`) from the array literal at the call site: keys written means it is not a list. A variable leaves it undecided, and nothing is added.

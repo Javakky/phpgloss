@@ -1,5 +1,6 @@
 package dev.javakky.phpstantypedoc.type;
 
+import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiWhiteSpace;
@@ -55,6 +56,11 @@ public final class PhpStanInvokeTypeProvider implements PhpTypeProvider4 {
         if (callee == null) {
             return null;
         }
+        if (!DumbService.isDumb(element.getProject())) {
+            // 未解決型を挟むと、この型に対する要素アクセスが読めなくなる (実測: `$xs[0]` が
+            // 一段前の型になる)。索引外ではその場で解いて、解決済みの型をそのまま返す
+            return resolveHere(callee, element.getProject());
+        }
         if (callee instanceof FunctionReference calleeCall && calleeCall.getName() != null) {
             // `opOf(...)()` の形。呼び出し先の解決ごと complete で行う
             return new PhpType().add("#" + KEY + FROM_CALL + CallSiteGenericResolver.encode(calleeCall));
@@ -94,6 +100,26 @@ public final class PhpStanInvokeTypeProvider implements PhpTypeProvider4 {
     }
 
     /**
+     * 索引外で、呼び出し先の型から `__invoke` の戻り値をその場で組み立てる。
+     */
+    private @Nullable PhpType resolveHere(PhpTypedElement callee, Project project) {
+        PhpType calleeType = callee instanceof FunctionReference calleeCall && calleeCall.getName() != null
+                ? CallSiteGenericResolver.resolveCallHere(calleeCall)
+                : callee.getType().global(project);
+        if (calleeType == null || calleeType.isEmpty()) {
+            return null;
+        }
+        PhpType result = new PhpType();
+        for (String typeString : calleeType.getTypesWithParametrisedParts()) {
+            PhpType invoked = invokeResultOf(project, typeString);
+            if (invoked != null) {
+                result.add(invoked);
+            }
+        }
+        return result.isEmpty() ? null : result;
+    }
+
+    /**
      * {@code PhpType#add} は文字列を union として分解しないので、先に自分で分ける。
      */
     private PhpType completeSignature(String encoded, Project project) {
@@ -128,7 +154,13 @@ public final class PhpStanInvokeTypeProvider implements PhpTypeProvider4 {
             }
             String substituted = TemplateSubstitution.apply(declared, bindings);
             if (!TemplateSubstitution.hasUnresolved(substituted, bindings.keySet())) {
-                return new PhpType().add(substituted);
+                PhpType resolved = new PhpType().add(substituted);
+            String plural = TemplateSubstitution.pluralFormOf(substituted);
+            if (plural != null) {
+                // 要素アクセスが読める形も足す。総称の形は残すので精度は落ちない
+                resolved.add(plural);
+            }
+            return resolved;
             }
         }
         return null;

@@ -105,6 +105,29 @@ final class CallSiteGenericResolver {
     }
 
     /**
+     * 関数呼び出しを、その場で (索引外で) 解く。呼び出し先の型引数が要る場面で使う。
+     */
+    static @Nullable PhpType resolveCallHere(FunctionReference reference) {
+        if (reference.getName() == null) {
+            return null;
+        }
+        Project project = reference.getProject();
+        List<Argument> arguments = new ArrayList<>();
+        for (PsiElement argument : reference.getParameters()) {
+            String signature = argument instanceof PhpTypedElement typed ? typed.getType().toString() : "";
+            arguments.add(new Argument(signature, argument.getText()));
+        }
+        PhpType result = new PhpType();
+        for (Function function : PhpIndex.getInstance(project).getFunctionsByName(reference.getName())) {
+            PhpType resolved = returnTypeOf(project, function, arguments, Map.of());
+            if (resolved != null) {
+                result.add(resolved);
+            }
+        }
+        return result.isEmpty() ? null : result;
+    }
+
+    /**
      * メソッド呼び出しを、その場で (索引外で) 解く。
      *
      * <p>レシーバの型引数はシグネチャを持ち回ると落ちる (実測)。`global()` で解けた型からなら取れる。
@@ -213,7 +236,13 @@ final class CallSiteGenericResolver {
             // 型変数が残ったままの型は出さない。読み手に意味がないため
             return null;
         }
-        return new PhpType().add(substituted);
+        PhpType resolved = new PhpType().add(substituted);
+        String plural = TemplateSubstitution.pluralFormOf(substituted);
+        if (plural != null) {
+            // 要素アクセスが読める形も足す。総称の形は残すので精度は落ちない
+            resolved.add(plural);
+        }
+        return resolved;
     }
 
     /**
