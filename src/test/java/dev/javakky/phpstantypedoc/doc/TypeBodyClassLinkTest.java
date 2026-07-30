@@ -44,6 +44,42 @@ public final class TypeBodyClassLinkTest extends BasePlatformTestCase {
                 html.contains("psi_element://\\App\\Domain\\non-empty-list"));
     }
 
+    /**
+     * PHP は配列型のリンクを要素クラス + {@code []} で出す。素のクラス名として引けないと
+     * クリックが「不正な形式の URL です」になる。
+     */
+    public void testResolvesArrayTypeLink() {
+        myFixture.addFileToProject("Account.php", """
+                <?php
+                namespace App\\Domain;
+
+                /** Account documentation. */
+                final class Account {}
+                """);
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, """
+                <?php
+                namespace App\\Domain;
+
+                /** @phpstan-type Payload array{accounts: non-empty-list<Account>} */
+                final class Holder
+                {
+                    /** @return Payload */
+                    public function get(): array
+                    {
+                        return [];
+                    }
+                }
+                """);
+        int offset = file.getText().lastIndexOf("Payload");
+        DocumentationTarget source = new PhpStanTypeDocumentationTargetProvider()
+                .documentationTargets(file, offset).getFirst();
+
+        var result = new PhpStanTypeDocumentationLinkHandler()
+                .resolveLink(source, "psi_element://\\App\\Domain\\Account[]");
+
+        assertNotNull("配列型のリンクが解決できていない", result);
+    }
+
     public void testResolvesClassLinkFromCustomDocumentationTarget() {
         myFixture.addFileToProject("Account.php", """
                 <?php

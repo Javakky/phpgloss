@@ -76,7 +76,8 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
      * も含まれる。この plugin の target を表示している間は platform 標準の PSI handler が働かないため、
      * ここで面倒を見ないとクリックが「ドキュメントが見つかりません」になる。
      */
-    private @Nullable LinkResolveResult resolveClass(PsiElement context, String fqn) {
+    private @Nullable LinkResolveResult resolveClass(PsiElement context, String rawFqn) {
+        String fqn = stripArraySuffix(rawFqn);
         PhpIndex index = PhpIndex.getInstance(context.getProject());
         Collection<PhpClass> classes = index.getClassesByFQN(fqn);
         if (classes.size() == 1) {
@@ -91,6 +92,19 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
         LOG.warn("PHPStan doc link: neither class nor namespace resolved"
                 + " (fqn=" + fqn + ", classes=" + classes.size() + ")");
         return null;
+    }
+
+    /**
+     * PHP は配列型のリンクを要素クラスに {@code []} を付けた形で出す
+     * ({@code non-empty-list<User>} → {@code psi_element://\App\Domain\User[]})。
+     * そのままではクラスとして引けず、クリックが「不正な形式の URL です」になる。
+     */
+    private String stripArraySuffix(String fqn) {
+        String stripped = fqn;
+        while (stripped.endsWith("[]")) {
+            stripped = stripped.substring(0, stripped.length() - 2);
+        }
+        return stripped;
     }
 
     private String stripTrailingSeparator(String fqn) {

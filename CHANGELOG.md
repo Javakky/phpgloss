@@ -11,6 +11,10 @@
 
 
 
+## 0.27.0
+
+- Resolve a link to an array type. PHP writes those as the element class with `[]` appended (`non-empty-list<User>` becomes `psi_element://\App\Domain\User[]`), which was rejected as a class name and reported the URL as malformed. Stopgap until type keywords carry their own documentation.
+
 ## 0.26.0
 
 - Search for usages when Go to Declaration is pressed on a `@phpstan-type` name, matching what the IDE does for a class or method name. The name in PHPDoc has no PSI that counts as a declaration, so its text range is declared as a symbol instead. An imported alias resolves to the same symbol as the original, so either end lists the whole set.
