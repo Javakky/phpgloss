@@ -6,6 +6,12 @@
 
 
 
+
+## 0.18.0
+
+- Carry the alias inside a `psi_element://` URL as `Owner::AliasName`. A custom scheme is rendered as a link but the documentation UI never dispatches the click, so the handler was never reached. A `#` fragment breaks the platform's PSI resolution. The `::` form keeps the known scheme while leaving the alias name recoverable.
+- Log every link the handler receives, so a failing click can be traced from the IDE log.
+
 ## 0.17.0
 
 - Resolve namespace links inside this plugin's documentation. PHP emits links such as `psi_element://\App\Domain\` in its generated documentation, and while this plugin's target is shown the platform's own PSI handler stays out of the way, so those clicks ended in "documentation not found".

@@ -40,10 +40,14 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
             @NotNull DocumentationTarget target,
             @NotNull String url
     ) {
-        boolean aliasLink = url.startsWith(PhpStanTypeDocumentationLink.ALIAS_PROTOCOL);
-        if (!aliasLink && !url.startsWith(PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL)) {
+        // 実機でどの URL が handler に届いているかを追うため、入口で必ず記録する。
+        LOG.warn("PHPStan doc link: resolveLink"
+                + " (url=" + url + ", target=" + target.getClass().getSimpleName() + ")");
+        if (!url.startsWith(PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL)) {
             return null;
         }
+        var aliasReferenceOpt = PhpStanTypeDocumentationLink.parseAlias(url);
+        boolean aliasLink = aliasReferenceOpt.isPresent();
         PsiElement context = contextElement(target);
         if (context == null) {
             LOG.warn("PHPStan doc link: context element not available"
@@ -54,11 +58,7 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
             return resolveClass(context, url.substring(
                     PhpStanTypeDocumentationLink.PSI_ELEMENT_PROTOCOL.length()));
         }
-        var aliasReference = PhpStanTypeDocumentationLink.parseAlias(url);
-        if (aliasReference.isEmpty()) {
-            LOG.warn("PHPStan doc link: malformed alias url (" + url + ")");
-            return null;
-        }
+        var aliasReference = aliasReferenceOpt;
         LinkResolveResult alias = resolveAlias(context, aliasReference.get());
         if (alias != null) {
             return alias;
@@ -77,9 +77,6 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
      * ここで面倒を見ないとクリックが「ドキュメントが見つかりません」になる。
      */
     private @Nullable LinkResolveResult resolveClass(PsiElement context, String fqn) {
-        if (fqn.contains("#")) {
-            return null;
-        }
         PhpIndex index = PhpIndex.getInstance(context.getProject());
         Collection<PhpClass> classes = index.getClassesByFQN(fqn);
         if (classes.size() == 1) {

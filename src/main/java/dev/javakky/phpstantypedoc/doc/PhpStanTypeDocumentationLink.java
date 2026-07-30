@@ -14,8 +14,11 @@ import java.util.Optional;
  */
 final class PhpStanTypeDocumentationLink {
     static final String PSI_ELEMENT_PROTOCOL = "psi_element://";
-    static final String ALIAS_PROTOCOL = "phpstan-type://";
-    private static final String SEPARATOR = "/alias/";
+    /**
+     * alias を運ぶ区切り。独自 scheme は documentation の UI 層がリンクとして扱わないため、
+     * {@code psi_element://} の中に埋め込む。`#` は platform の PSI 解決を壊すので使えない。
+     */
+    private static final String SEPARATOR = "::";
 
     private PhpStanTypeDocumentationLink() {
     }
@@ -30,14 +33,14 @@ final class PhpStanTypeDocumentationLink {
      * @param ownerClassFqn エイリアスを宣言 / import しているクラス。ここを起点に解決する
      */
     static String forAlias(String ownerClassFqn, String aliasName) {
-        return ALIAS_PROTOCOL + normalize(ownerClassFqn) + SEPARATOR + aliasName;
+        return PSI_ELEMENT_PROTOCOL + normalize(ownerClassFqn) + SEPARATOR + aliasName;
     }
 
     static Optional<AliasReference> parseAlias(String url) {
-        if (!url.startsWith(ALIAS_PROTOCOL)) {
+        if (!url.startsWith(PSI_ELEMENT_PROTOCOL)) {
             return Optional.empty();
         }
-        String body = url.substring(ALIAS_PROTOCOL.length());
+        String body = url.substring(PSI_ELEMENT_PROTOCOL.length());
         int separator = body.indexOf(SEPARATOR);
         if (separator < 0) {
             return Optional.empty();

@@ -59,11 +59,11 @@ public final class PhpFunctionDocumentationTargetTest extends BasePlatformTestCa
         // alias 名はエイリアス自身の documentation へのリンクにする
         // alias 名はエイリアス自身の documentation へ遷移するリンクにする
         assertTrue("alias link が生成されていない: " + html,
-                html.contains("phpstan-type://\\App\\CreateUser/alias/CreateUserData"));
+                html.contains("psi_element://\\App\\CreateUser::CreateUserData"));
         assertTrue("複数 alias の link が生成されていない: " + html,
-                html.contains("phpstan-type://\\App\\CreateUser/alias/LocalData"));
+                html.contains("psi_element://\\App\\CreateUser::LocalData"));
         assertFalse("通常型まで alias link になっている: " + html,
-                html.contains("/alias/string"));
+                html.contains("::string"));
     }
 
     public void testResolvesAliasLinkFromFunctionDocumentation() {
