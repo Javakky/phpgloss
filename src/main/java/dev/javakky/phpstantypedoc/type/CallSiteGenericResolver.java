@@ -10,6 +10,7 @@ import com.jetbrains.php.lang.psi.elements.Parameter;
 import com.jetbrains.php.lang.psi.elements.PhpTypedElement;
 import com.jetbrains.php.lang.psi.resolve.types.PhpType;
 import com.jetbrains.php.lang.psi.resolve.types.generics.PhpGenericsBaseExtendedWithGenericTypeProvider;
+import dev.javakky.phpstantypedoc.keyword.PhpStanTypeKeywords;
 import dev.javakky.phpstantypedoc.parser.PhpDocDeclaredTypeReader;
 import dev.javakky.phpstantypedoc.parser.PhpFileModel;
 import dev.javakky.phpstantypedoc.parser.PhpFileModelCache;
@@ -36,6 +37,8 @@ final class CallSiteGenericResolver {
     private static final char UNION_ESCAPE = 'ᨣ';
     /** 関数名と引数を区切る文字。 */
     private static final char FIELD = 'ᨤ';
+    /** 引数の「型」と「書かれたテキスト」を区切る文字。条件型の判定にテキストが要る。 */
+    private static final char SUBFIELD = 'ᨦ';
 
     private CallSiteGenericResolver() {
     }
@@ -50,6 +53,8 @@ final class CallSiteGenericResolver {
             if (argument instanceof PhpTypedElement typed) {
                 encoded.append(typed.getType().toString().replace('|', UNION_ESCAPE));
             }
+            // 条件型は実引数の値 (`Shape::AS_LIST`) で分岐するため、型だけでは足りない
+            encoded.append(SUBFIELD).append(argument.getText().replace('|', UNION_ESCAPE));
         }
         return encoded.toString();
     }
@@ -64,10 +69,10 @@ final class CallSiteGenericResolver {
             return null;
         }
         String functionName = fields.getFirst();
-        List<String> argumentSignatures = fields.subList(1, fields.size());
+        List<Argument> arguments = fields.subList(1, fields.size()).stream().map(Argument::parse).toList();
         PhpType result = new PhpType();
         for (Function function : PhpIndex.getInstance(project).getFunctionsByName(functionName)) {
-            PhpType resolved = returnTypeOf(project, function, argumentSignatures);
+            PhpType resolved = returnTypeOf(project, function, arguments);
             if (resolved != null) {
                 result.add(resolved);
             }
@@ -78,25 +83,24 @@ final class CallSiteGenericResolver {
     private static @Nullable PhpType returnTypeOf(
             Project project,
             Function function,
-            List<String> argumentSignatures
+            List<Argument> arguments
     ) {
         Collection<String> templates = PhpGenericsBaseExtendedWithGenericTypeProvider.getTemplates(function);
         PhpDocComment doc = function.getDocComment();
         if (templates.isEmpty() || doc == null) {
             return null;
         }
-        String declaredReturn = PhpDocDeclaredTypeReader.typeNameFor(
-                doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
+        Parameter[] parameters = function.getParameters();
+        String declaredReturn = returnExpressionOf(doc, parameters, arguments);
         if (declaredReturn == null || !declaredReturn.contains("<")) {
             // 型引数を持たない戻り値は PhpStorm が既に解いている
             return null;
         }
         Map<String, String> bindings = TemplateUnification.empty();
-        Parameter[] parameters = function.getParameters();
-        for (int i = 0; i < parameters.length && i < argumentSignatures.size(); i++) {
+        for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
             String declared = PhpDocDeclaredTypeReader.typeNameFor(
                     doc, PhpDocDeclaredTypeReader.PARAM_TAGS, parameters[i].getName());
-            String signature = argumentSignatures.get(i);
+            String signature = arguments.get(i).signature();
             if (declared == null || signature.isBlank()) {
                 continue;
             }
@@ -114,6 +118,56 @@ final class CallSiteGenericResolver {
     }
 
     /**
+     * 戻り値の宣言を読む。条件型なら実引数を見て分岐を選ぶ。
+     */
+    private static @Nullable String returnExpressionOf(
+            PhpDocComment doc,
+            Parameter[] parameters,
+            List<Argument> arguments
+    ) {
+        ConditionalReturnType conditional = ConditionalReturnType.parse(rawReturnOf(doc));
+        if (conditional == null) {
+            return PhpDocDeclaredTypeReader.typeNameFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
+        }
+        for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
+            if (conditional.subject().equals(parameters[i].getName())) {
+                return conditional.select(arguments.get(i).text());
+            }
+        }
+        return null;
+    }
+
+    /**
+     * `@phpstan-return` に書かれた本文をそのまま読む。条件型は {@code PhpDocType} にならないため、
+     * 型として読もうとすると括弧の中身が落ちる。
+     */
+    private static @Nullable String rawReturnOf(PhpDocComment doc) {
+        for (String tag : List.of("@phpstan-return", "@psalm-return")) {
+            for (var element : doc.getTagElementsByName(tag)) {
+                String text = element.getText();
+                String body = text.substring(text.indexOf(tag) + tag.length()).trim();
+                if (!body.isEmpty()) {
+                    return body;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 実引数一つ分。条件型の判定には書かれたテキストが要る。
+     */
+    private record Argument(String signature, String text) {
+        static Argument parse(String encoded) {
+            int separator = encoded.indexOf(SUBFIELD);
+            return separator < 0
+                    ? new Argument(encoded, "")
+                    : new Argument(encoded.substring(0, separator),
+                            encoded.substring(separator + 1).replace(UNION_ESCAPE, '|'));
+        }
+    }
+
+    /**
      * `Op<V>` のように短い名前で書かれたクラスを完全修飾名にする。
      * そのままだと `\Op` として扱われ、存在しないクラスになる。
      */
@@ -121,6 +175,10 @@ final class CallSiteGenericResolver {
         int angle = declared.indexOf('<');
         String base = angle < 0 ? declared : declared.substring(0, angle);
         if (base.startsWith("\\") || base.isBlank() || function.getContainingFile() == null) {
+            return declared;
+        }
+        if (PhpStanTypeKeywords.find(base).isPresent()) {
+            // `non-empty-list` などの型キーワードはクラスではない。修飾すると存在しない名前になる
             return declared;
         }
         PhpFileModel fileModel = PhpFileModelCache.of(function.getContainingFile());

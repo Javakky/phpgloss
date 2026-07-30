@@ -11,6 +11,11 @@
 
 
 
+## 0.36.0
+
+- Evaluate a conditional return type against the argument at the call site. `($mode is Shape::AS_LIST ? non-empty-list<V> : array<K, V>)` now picks a branch when the argument is an enum case; PhpStorm parses the syntax but never evaluates it, returning the union of both branches whatever is passed (YouTrack WI-85338 and WI-77577, both open).
+- Say nothing when the branch cannot be decided — an omitted argument, or a branch whose type variables the arguments do not determine. A wrong type is worse than none.
+
 ## 0.35.0
 
 - Resolve a type variable that sits inside a type argument. PhpStorm resolves `@return T` from the call's arguments but leaves `@return Op<V>` as `Op<#V>`, so everything downstream loses the element type.
