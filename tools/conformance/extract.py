@@ -32,7 +32,11 @@ def main() -> int:
     parser.add_argument('project', help='composer.json のあるプロジェクトルート')
     parser.add_argument('paths', nargs='+', help='解析対象 (プロジェクトルートからの相対パス)')
     parser.add_argument('-o', '--output', default='-', help='出力先 JSON (省略時は標準出力)')
-    parser.add_argument('--level', default='0', help='PHPStan level (既定 0。型採取に検査は不要)')
+    parser.add_argument('--level', default='0',
+                        help='PHPStan level (既定 0。型採取に検査は不要)')
+    parser.add_argument('--memory-limit', default='2G',
+                        help='PHPStan に渡すメモリ上限 (既定 2G。大きなプロジェクトは既定の 128M で落ちる)')
+    parser.add_argument('--timeout', type=int, default=1800, help='秒 (既定 1800)')
     args = parser.parse_args()
 
     project = os.path.abspath(args.project)
@@ -41,24 +45,29 @@ def main() -> int:
         print(f'error: {phpstan} が無い (composer install 済みのプロジェクトを指定する)', file=sys.stderr)
         return 1
 
-    # 元の設定は使わない。プロジェクト独自の ignore や baseline が採取を邪魔しないよう、
-    # 採取専用の最小設定を作る
+    # プロジェクトの設定を土台にする。大きなプロジェクトは autoload / bootstrap を設定に
+    # 持っており、それを落とすと解析が「severe errors」で不完全になる (実測)。
+    # baseline は既存のエラー文面を無視する仕組みなので、こちらの報告は消されない
+    base = next((name for name in ('phpstan.neon', 'phpstan.neon.dist', 'phpstan.dist.neon')
+                 if os.path.exists(os.path.join(project, name))), None)
     with tempfile.NamedTemporaryFile('w', suffix='.neon', dir=project, delete=False) as neon:
+        if base:
+            neon.write(f'includes:\n    - {base}\n')
         neon.write(
             'parameters:\n'
             f'    level: {args.level}\n'
             '    reportUnmatchedIgnoredErrors: false\n'
             'rules:\n'
             '    - PhpStanTypeDoc\\Conformance\\DumpAssignRule\n'
-            'services: []\n'
         )
         neon_path = neon.name
 
     try:
         result = subprocess.run(
             [phpstan, 'analyse', '--no-progress', '--error-format=raw',
+             '--memory-limit', args.memory_limit,
              '-c', neon_path, '--autoload-file', RULE_FILE, *args.paths],
-            cwd=project, capture_output=True, text=True, timeout=600,
+            cwd=project, capture_output=True, text=True, timeout=args.timeout,
         )
         rows = []
         for line in result.stdout.splitlines():
@@ -66,6 +75,8 @@ def main() -> int:
             if not m:
                 continue
             file, lineno, var, typ = m.groups()
+            # 設定によっては報告の末尾に識別子が付く (`... [identifier=conformance.varType]`)
+            typ = re.sub(r'\s*\[identifier=[^\]]*\]\s*$', '', typ)
             rows.append({
                 'file': os.path.relpath(file, project),
                 'line': int(lineno),
