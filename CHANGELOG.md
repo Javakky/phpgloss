@@ -11,6 +11,12 @@
 
 
 
+## 0.45.0
+
+- Patch the type text inside PHP's own hover instead of replacing the whole page. The rebuilt hover lost the namespace link and the full source path (reported on the real machine); the standard HTML now stays and only the type is swapped.
+- Fold `array<array-key, X>` into `X[]` — an unbounded key says nothing — so the bound-filled key from the resolver is subsumed by PhpStorm's own `array<string, int>` instead of being shown beside it.
+- Treat spellings that differ only in spacing (`array<string,int>` vs `array<string, int>`) as one type, and fold `array<int, X>` when a `list<X>` is present.
+
 ## 0.44.0
 
 - Drop the abstract types a more precise one in the same union already covers when hovering a variable. A variable's type is the union of several signature parts, so `array` and the plural form stay beside a resolved `list<int>` (measured: `$result: array|int[]|list`). The other parts cannot be removed from the provider side — a type provider can only stop its own key from being read — so they are folded away at display time. Only subsumption is folded: `int|string` and `\Foo[]|\Bar[]` are left alone.

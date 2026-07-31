@@ -7,6 +7,8 @@ import com.intellij.platform.backend.presentation.TargetPresentation;
 import com.intellij.pom.Navigatable;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.lang.LanguageDocumentation;
+import com.intellij.lang.documentation.DocumentationProvider;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.jetbrains.php.lang.psi.elements.Parameter;
 import com.jetbrains.php.lang.psi.elements.PhpNamedElement;
@@ -70,8 +72,47 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
 
     @Override
     public @Nullable DocumentationResult computeDocumentation() {
+        // PHP 標準の HTML を土台にし、型の部分だけを整理後の型に差し替える。丸ごと自前で
+        // 組み直すと、名前空間のリンクや Source 行の体裁が失われる (実機で指摘を受けた)
+        String base = standardHtml();
+        String patched = base == null ? null : replaceTypeText(base);
+        if (patched != null) {
+            return DocumentationResult.documentation(patched);
+        }
         return DocumentationResult.documentation(renderer.renderVariableType(
                 variable.getName(), typeText(), variable.getContainingFile().getName()));
+    }
+
+    private @Nullable String standardHtml() {
+        DocumentationProvider provider =
+                LanguageDocumentation.INSTANCE.forLanguage(variable.getLanguage());
+        return provider == null ? null : provider.generateDoc(variable, variable);
+    }
+
+    /**
+     * `$name: <型>` の型の部分を差し替える。標準の HTML は型の各要素をリンク付きで並べるため、
+     * 名前の直後から定義ブロックの閉じまでを、整理後の型 (クラス名はリンク化) に置き換える。
+     */
+    private @Nullable String replaceTypeText(String html) {
+        String marker = name() + ":";
+        int at = html.indexOf(marker);
+        if (at < 0) {
+            return null;
+        }
+        int end = html.indexOf("</pre>", at);
+        if (end < 0) {
+            end = html.indexOf("</div>", at);
+        }
+        if (end < 0) {
+            return null;
+        }
+        var linkifier = new PhpStanTypeBodyLinkifier(variable.getProject(), null);
+        String linked = linkifier.linkify(escape(typeText()));
+        return html.substring(0, at) + marker + " " + linked + html.substring(end);
+    }
+
+    private String escape(String text) {
+        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
     private String name() {

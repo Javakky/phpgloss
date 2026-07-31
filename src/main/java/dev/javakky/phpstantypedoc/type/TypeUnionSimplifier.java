@@ -89,8 +89,16 @@ public final class TypeUnionSimplifier {
             return others.stream().anyMatch(other -> holdsElement(other, shape.element()));
         }
         // 空でないと分かっている方が精密
-        return "list".equals(shape.base())
-                && others.stream().anyMatch(other -> isGenericOf("non-empty-list", other, shape.element()));
+        if ("list".equals(shape.base())
+                && others.stream().anyMatch(other -> isGenericOf("non-empty-list", other, shape.element()))) {
+            return true;
+        }
+        // 整数キーの配列より、連番と分かっている list の方が精密
+        return ANY_ARRAY.equals(shape.base()) && shape.arguments().size() == 2
+                && "int".equals(shape.arguments().getFirst())
+                && others.stream().anyMatch(other ->
+                        isGenericOf("list", other, shape.element())
+                                || isGenericOf("non-empty-list", other, shape.element()));
     }
 
     /**
@@ -118,10 +126,28 @@ public final class TypeUnionSimplifier {
     private static String keyOf(String type) {
         String stripped = stripKeywordPrefix(type.trim());
         ArrayShape shape = arrayShapeOf(stripped);
-        if (shape != null && ANY_ARRAY.equals(shape.base()) && shape.arguments().size() == 1) {
-            return shape.element() + PLURAL;
+        if (shape == null) {
+            return stripped;
         }
-        return stripped;
+        if (shape.isPlural()) {
+            return keyOf(shape.element()) + PLURAL;
+        }
+        if (ANY_ARRAY.equals(shape.base())
+                && (shape.arguments().size() == 1
+                    || (shape.arguments().size() == 2 && "array-key".equals(shape.arguments().getFirst())))) {
+            // `array<X>` も `array<array-key, X>` もキーを縛らない配列で、`X[]` と同じ意味になる
+            return keyOf(shape.element()) + PLURAL;
+        }
+        // 空白の揃え方が出所で違う (`array<string,int>` と `array<string, int>`)。同じ型なので
+        // 組み立て直して 1 つの綴りに寄せる
+        StringBuilder canonical = new StringBuilder(shape.base()).append('<');
+        for (int i = 0; i < shape.arguments().size(); i++) {
+            if (i > 0) {
+                canonical.append(", ");
+            }
+            canonical.append(keyOf(shape.arguments().get(i)));
+        }
+        return canonical.append('>').toString();
     }
 
     /**
