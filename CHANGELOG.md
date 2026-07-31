@@ -11,6 +11,11 @@
 
 
 
+## 0.54.0
+
+- Follow an array literal assigned to a variable when a condition asks about its shape. `groupBy($input, ...)` decides on `$input is list<V>`, and PhpStorm holds even a sequential literal as `array<int, int>`, so the shape could not be told from the type — the whole call stayed unresolved and PhpStorm's own answer (`array<int, int>[]`: the group key taken from the input's key type, the value from the element type) was shown instead. Only enum cases and array literals are followed; nothing else states its value in the source.
+- Sweep every assignment in a real project against PHPStan (`tools/conformance`, `ConformanceSweepTest`). Hand-found gaps leave the ones nobody looked for; the sweep reports each variable as agreeing, silent, or contradicting. It found the `groupBy` defect above independently of the report that prompted it.
+
 ## 0.53.0
 
 - Evaluate a negated condition, `($mode is not Shape::AS_LIST ? A : B)`. The two-word `is not` form was read as a condition of its own, and the type it produced was a class named after the word (`\Probe\not` — measured). The decision is the plain one with its truth flipped, so a condition that cannot be decided stays undecided rather than picking the other branch.

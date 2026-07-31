@@ -3,6 +3,7 @@ package dev.javakky.phpstantypedoc.type;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.jetbrains.php.lang.psi.elements.ArrayCreationExpression;
 import com.jetbrains.php.lang.psi.elements.AssignmentExpression;
 import com.jetbrains.php.lang.psi.elements.ClassConstantReference;
 import com.jetbrains.php.lang.psi.elements.ControlStatement;
@@ -22,8 +23,10 @@ import java.util.Set;
  * 呼び出しに書かれた実引数を、条件型の判定に使えるテキストにする。
  *
  * <p>書かれたままでは判定できない形が 2 つある。短い名前のクラス定数 (`Shape::AS_LIST`) は
- * 別 namespace の同名 enum と見分けが付かず、変数 (`$mode`) は値が書かれていない。前者は
- * 書かれたファイルの namespace / use で完全修飾し、後者は同じ関数の中の代入を 1 段だけ辿る。
+ * 別 namespace の同名 enum と見分けが付かず、変数 (`$mode` / `$input`) は値が書かれていない。
+ * 前者は書かれたファイルの namespace / use で完全修飾し、後者は同じ関数の中の代入を 1 段だけ辿る。
+ * 辿った先は enum ケースか配列リテラルに限る。`$input is list<V>` の判定にはリテラルの中身が要り、
+ * PhpStorm の型は連番のリテラルも `array<int, int>` として持つため型からは決められない。
  */
 final class ArgumentText {
     /** 書かれた場所によって指す先が変わる名前。完全修飾できない。 */
@@ -134,7 +137,13 @@ final class ArgumentText {
             assigned = assignment.getValue();
         }
         boolean beforeUse = assigned != null && assigned.getTextOffset() < variable.getTextOffset();
-        return beforeUse && assigned instanceof ClassConstantReference ? assigned : null;
+        if (!beforeUse) {
+            return null;
+        }
+        // enum ケースは条件の値判定に、配列リテラルは値の形の判定に使う。どちらも書かれた値が
+        // そのまま条件を決める。それ以外は値が読めないので辿らない
+        return assigned instanceof ClassConstantReference || assigned instanceof ArrayCreationExpression
+                ? assigned : null;
     }
 
     private static boolean isDirectlyInBody(PsiElement assignment, Function scope) {
