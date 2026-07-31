@@ -94,4 +94,27 @@ public final class TypeUnionSimplifierTest extends TestCase {
         assertTrue("選択肢かもしれない組を狭めている",
                 TypeUnionSimplifier.simplify(java.util.List.of("list<\\int>", "array<\\int, \\int>")).isEmpty());
     }
+
+    /**
+     * 分岐確定時、解決器の粗い束縛 (`int`) より PhpStorm の定数追跡 (`int<20, 20>`) が精密なら
+     * そちらを見せる。粗い方に固めると、既知の精度を自分で捨てることになる。
+     */
+    public void testRefinesAgainstAMorePreciseCoDescription() {
+        var refined = TypeUnionSimplifier.refineAgainst(
+                java.util.List.of("array<string, int>", "null"),
+                java.util.List.of("\\array<\\string,\\int<20,20>>", "\\array", "\\null"));
+
+        assertEquals(java.util.List.of("array<string, int<20,20>>", "null"), refined);
+    }
+
+    /**
+     * 構造が違う成分では置き換えない。`list<int<20,20>>` は `array<string, int>` の精密化ではない。
+     */
+    public void testDoesNotRefineAcrossDifferentStructures() {
+        var refined = TypeUnionSimplifier.refineAgainst(
+                java.util.List.of("array<string, int>"),
+                java.util.List.of("list<\\int<20,20>>"));
+
+        assertEquals(java.util.List.of("array<string, int>"), refined);
+    }
 }

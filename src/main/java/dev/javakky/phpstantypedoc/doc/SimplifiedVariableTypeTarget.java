@@ -51,7 +51,11 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
         // union の他の成分は同じ値の粗い近似 (選択肢ではない) と分かる。表示はそれに固める
         List<String> resolved = resolvedFromAssignment(variable);
         if (!resolved.isEmpty()) {
-            return Optional.of(new SimplifiedVariableTypeTarget(variable, resolved));
+            // 解決器の束縛は PhpStorm の定数追跡 (`int<20,20>`) より粗いことがある。
+            // 分岐が確定しているなら union は全部同じ値の記述なので、同じ構造の精密な成分に置き換える
+            List<String> refined = TypeUnionSimplifier.refineAgainst(
+                    resolved, variable.getType().global(file.getProject()).getTypesWithParametrisedParts());
+            return Optional.of(new SimplifiedVariableTypeTarget(variable, refined));
         }
         return TypeUnionSimplifier.simplify(variable.getType().global(file.getProject()).getTypesWithParametrisedParts())
                 .map(simplified -> new SimplifiedVariableTypeTarget(variable, simplified));

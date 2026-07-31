@@ -59,6 +59,71 @@ public final class TypeUnionSimplifier {
     }
 
     /**
+     * 確定した型を、union に並ぶより精密な共記述で置き換える。
+     *
+     * <p>この解決器の束縛は索引時シグネチャ経由のため、PhpStorm 自身の定数追跡
+     * (`int<20,20>` 等) より粗いことがある。分岐が確定した状況では union の全成分が同じ値の
+     * 記述なので、**同じ構造**で要素だけが精密な成分があればそちらを見せる。構造一致に限る
+     * ことで、選択肢どうし (`list<X>` と `array<int, X>`) を混ぜる誤りは起きない。
+     */
+    public static List<String> refineAgainst(List<String> resolved, Collection<String> union) {
+        List<String> unionKeys = union.stream().map(TypeUnionSimplifier::keyOf).toList();
+        return resolved.stream().map(part -> {
+            String best = part;
+            for (String candidate : unionKeys) {
+                if (!candidate.equals(best) && refines(candidate, best)) {
+                    best = candidate;
+                }
+            }
+            return best;
+        }).toList();
+    }
+
+    /**
+     * `sub` が `sup` の精密化か。同じ値のより狭い記述だけを真にする。
+     */
+    private static boolean refines(String sub, String sup) {
+        if (sub.equals(sup)) {
+            return true;
+        }
+        if (scalarRefines(sub, sup)) {
+            return true;
+        }
+        ArrayShape subShape = arrayShapeOf(sub);
+        ArrayShape supShape = arrayShapeOf(sup);
+        if (subShape == null || supShape == null
+                || subShape.arguments().size() != supShape.arguments().size()) {
+            return false;
+        }
+        boolean baseOk = subShape.base().equals(supShape.base())
+                || ("non-empty-" + supShape.base()).equals(subShape.base());
+        if (!baseOk) {
+            return false;
+        }
+        for (int i = 0; i < subShape.arguments().size(); i++) {
+            if (!refines(subShape.arguments().get(i), supShape.arguments().get(i))) {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    /**
+     * スカラーの精密化。範囲付き整数 (`int<20, 20>`) と、より狭い型キーワード。
+     */
+    private static boolean scalarRefines(String sub, String sup) {
+        return switch (sup) {
+            case "int" -> sub.startsWith("int<")
+                    || Set.of("positive-int", "non-negative-int", "negative-int",
+                            "non-positive-int", "non-zero-int", "literal-int").contains(sub);
+            case "string" -> Set.of("non-empty-string", "non-falsy-string", "truthy-string",
+                    "literal-string", "non-empty-literal-string", "numeric-string",
+                    "lowercase-string", "class-string", "callable-string").contains(sub);
+            default -> false;
+        };
+    }
+
+    /**
      * 表示用の綴りに揃えて重複を除く。包摂は行わない (確定した型をそのまま見せる用途)。
      */
     public static List<String> normalize(Collection<String> types) {

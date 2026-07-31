@@ -11,6 +11,10 @@
 
 
 
+## 0.51.0
+
+- Never trade precision away when fixing the hover. The resolver's own binding travels through the indexed signature, which flattens PhpStorm's constant tracking (`int<20,20>` became `int`), and fixing the hover to it hid the finer type PhpStorm already knew. With the branch decided every union member describes the same value, so a member with the same structure and a strictly finer element now replaces the resolver's coarser one. Structure must match, keeping genuine alternatives (`list<X>` vs `array<int, X>`) unmixed.
+
 ## 0.50.0
 
 - Read every declared union whole. The parsed doc type yields only the first member — measured on `@param`, `@return` and `@var` alike — so `array<K, V>` written after `list<V>|` was never seen (which is why the key never bound from the arguments), `@var User|null` lost its null, and an `__invoke` returning `V|null` claimed the value always exists. One raw reader now serves all of them, keeping `V | null` spelled with spaces and cutting before the trailing description.
