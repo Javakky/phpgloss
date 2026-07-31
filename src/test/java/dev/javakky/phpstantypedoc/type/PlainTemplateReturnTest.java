@@ -50,5 +50,11 @@ public final class PlainTemplateReturnTest extends BasePlatformTestCase {
 
         assertTrue("精密な要素型が落ちている: " + parts,
                 parts.stream().anyMatch(t -> t.contains("positive-int") || t.replace(" ", "").contains("int<1,")));
+        // Option 型なので null は必ず残る。in-place の解決結果でも落ちてはいけない
+        var inPlace = PsiTreeUtil.findChildrenOfType(file, com.jetbrains.php.lang.psi.elements.FunctionReference.class)
+                .stream().filter(r -> "lastOrNull".equals(r.getName())).findFirst()
+                .flatMap(ResolvedCallType::of).orElseThrow();
+        assertTrue("in-place の解決から null が落ちている: " + inPlace.getTypes(),
+                inPlace.getTypes().stream().anyMatch(t -> t.equals("\\null") || t.equals("null")));
     }
 }

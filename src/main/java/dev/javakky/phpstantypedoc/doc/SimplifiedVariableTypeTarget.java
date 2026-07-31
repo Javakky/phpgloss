@@ -192,6 +192,10 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
         return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;");
     }
 
+    PsiElement contextElement() {
+        return variable;
+    }
+
     private String name() {
         return "$" + variable.getName();
     }

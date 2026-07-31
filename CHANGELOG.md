@@ -11,6 +11,11 @@
 
 
 
+## 0.49.0
+
+- Keep the `|null` of an option-style return. `@return V|null` was read through the parsed doc type, which yields only the first member of a union, so the resolved type claimed the value always exists. The whole written union is now read raw, cut off before the trailing description.
+- Make keyword links inside a variable hover actually open. The link handler did not recognise the variable-hover target, so its context was unavailable and the link was drawn but dead.
+
 ## 0.48.0
 
 - Keep a refinement written in `@var` — `list<positive-int>` gave `null|int`, because PhpStorm's type flattens `positive-int` to `int` before anything can read it. The written text survives nowhere else, so it is read from the PHPDoc and matched structurally against the declared parameter (`list<V>` × `list<positive-int>` binds `V`), and carried through the indexing pass alongside the argument.

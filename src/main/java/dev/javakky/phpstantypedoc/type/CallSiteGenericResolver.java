@@ -453,10 +453,33 @@ final class CallSiteGenericResolver {
      */
     private static @Nullable String returnExpressionOf(PhpDocComment doc, CallSite callSite) {
         String raw = rawReturnOf(doc);
-        if (ConditionalReturnType.parse(raw) == null) {
-            return PhpDocDeclaredTypeReader.typeNameFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
+        if (ConditionalReturnType.parse(raw) != null) {
+            return ConditionalReturnType.resolve(raw, callSite);
         }
-        return ConditionalReturnType.resolve(raw, callSite);
+        if (raw != null) {
+            // `@return V|null 説明文` の union を丸ごと読む。PhpDocType 経由 (typeNameFor) は
+            // union の先頭しか返さず、`|null` が落ちる (実測: Option 型の null が消えた)
+            return firstTypeTokenOf(raw);
+        }
+        return PhpDocDeclaredTypeReader.typeNameFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
+    }
+
+    /**
+     * 型の直後に説明文が続く形から、型だけを取り出す。型引数の中の空白は区切りにしない。
+     */
+    private static String firstTypeTokenOf(String body) {
+        int depth = 0;
+        for (int i = 0; i < body.length(); i++) {
+            char c = body.charAt(i);
+            if (c == '<' || c == '{' || c == '(') {
+                depth++;
+            } else if (c == '>' || c == '}' || c == ')') {
+                depth--;
+            } else if (depth == 0 && Character.isWhitespace(c)) {
+                return body.substring(0, i);
+            }
+        }
+        return body;
     }
 
     /**
@@ -464,7 +487,7 @@ final class CallSiteGenericResolver {
      * 型として読もうとすると括弧の中身が落ちる。
      */
     private static @Nullable String rawReturnOf(PhpDocComment doc) {
-        for (String tag : List.of("@phpstan-return", "@psalm-return")) {
+        for (String tag : List.of("@phpstan-return", "@psalm-return", "@return")) {
             for (var element : doc.getTagElementsByName(tag)) {
                 String text = element.getText();
                 String body = stripDocDecoration(text.substring(text.indexOf(tag) + tag.length()));

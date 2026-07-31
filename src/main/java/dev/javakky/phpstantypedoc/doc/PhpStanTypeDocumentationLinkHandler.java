@@ -213,6 +213,10 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
         if (target instanceof PhpStanKeywordDocumentationTarget keywordTarget) {
             return keywordTarget.contextElement();
         }
+        if (target instanceof SimplifiedVariableTypeTarget variableTarget) {
+            // これが無いと変数ホバーの中のキーワードリンクが「押せるのに何も起きない」になる
+            return variableTarget.contextElement();
+        }
         return null;
     }
 }
