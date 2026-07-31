@@ -11,6 +11,11 @@
 
 
 
+## 0.56.0
+
+- Show the type read from an array literal when PhpStorm's own answer disagrees. Keys written as class constants (`[Region::NORTH => [...], Region::SOUTH => [...]]`) are seen as integer keys, so a lookup table came out as `array<int, string>[]` where its keys are strings. The literal states its keys, and reading them was already done for binding type variables — the same reading now reaches the variable itself. Nothing is claimed when an element or key is unreadable, or when PhpStorm already agrees.
+- Point the sweep at any project, and measure the type as shown rather than as held. Running it over a large codebase (830 files, 4,618 assignments) found the defect above, plus three faults in the collector itself: the project's own PHPStan config has to be the base (dropping it loses autoload and the analysis comes back incomplete), the default 128M memory limit is not enough, and the reported identifier was being kept as part of the type.
+
 ## 0.55.0
 
 - Build the element type of an array literal from what is written. PhpStorm holds `[null, 1, 2]` as `array<int, mixed>`, and a type variable bound from it collapsed to `mixed`; the written elements each have a readable type, so they are joined into a union instead. Keys are read the same way, and nothing is built when an element or key is itself unreadable — a coarse guess there would overwrite what the arguments already give.

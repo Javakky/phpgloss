@@ -16,6 +16,7 @@ import com.jetbrains.php.lang.psi.elements.FunctionReference;
 import com.jetbrains.php.lang.psi.elements.Parameter;
 import com.jetbrains.php.lang.psi.elements.PhpNamedElement;
 import com.jetbrains.php.lang.psi.elements.Variable;
+import dev.javakky.phpstantypedoc.type.ArgumentText;
 import dev.javakky.phpstantypedoc.type.ResolvedCallType;
 import dev.javakky.phpstantypedoc.type.TypeUnionSimplifier;
 import org.jetbrains.annotations.NotNull;
@@ -49,6 +50,12 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
         }
         // この plugin の解決器が代入右辺の分岐を確定させているなら、その型が値の精密化で、
         // union の他の成分は同じ値の粗い近似 (選択肢ではない) と分かる。表示はそれに固める
+        // 書かれたリテラルから読める型は、推論より確か。PhpStorm はキーがクラス定数だと
+        // 整数キーの配列と見る (実測: `[Region::NORTH => [...]]` が `array<int, string>[]`)
+        List<String> written = writtenFromLiteral(variable);
+        if (!written.isEmpty()) {
+            return Optional.of(new SimplifiedVariableTypeTarget(variable, written));
+        }
         List<String> resolved = resolvedFromAssignment(variable);
         if (!resolved.isEmpty()) {
             // 解決器の束縛は PhpStorm の定数追跡 (`int<20,20>`) より粗いことがある。
@@ -59,6 +66,33 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
         }
         return TypeUnionSimplifier.simplify(variable.getType().global(file.getProject()).getTypesWithParametrisedParts())
                 .map(simplified -> new SimplifiedVariableTypeTarget(variable, simplified));
+    }
+
+    /**
+     * 変数に代入された配列リテラルから読める型。読めないときは空。
+     *
+     * <p>リテラルは書かれたものそのものなので、推論より確か。ただし要素やキーが読めない
+     * リテラルでは何も返さない (組み立てを諦める判断は {@code literalArrayTypeOf} が持つ)。
+     */
+    private static List<String> writtenFromLiteral(PhpNamedElement variable) {
+        if (!(variable instanceof Variable)) {
+            return List.of();
+        }
+        // 代入の左辺そのものを指しているときは、その右辺が値になる (辿る対象は「使う側」の変数)
+        PsiElement source = variable;
+        if (variable.getParent() instanceof AssignmentExpression assignment
+                && assignment.getVariable() == variable && assignment.getValue() != null) {
+            source = assignment.getValue();
+        }
+        String written = ArgumentText.literalArrayTypeOf(source, variable.getProject());
+        if (written == null) {
+            return List.of();
+        }
+        List<String> normalized = TypeUnionSimplifier.normalize(List.of(written));
+        // PhpStorm 自身が同じ型に辿り着いているなら、割り込む必要はない
+        List<String> current = TypeUnionSimplifier.normalize(
+                variable.getType().global(variable.getProject()).getTypesWithParametrisedParts());
+        return normalized.equals(current) ? List.of() : normalized;
     }
 
     /**
@@ -204,7 +238,7 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
         return "$" + variable.getName();
     }
 
-    private String typeText() {
+    String typeText() {
         return String.join("|", types);
     }
 }

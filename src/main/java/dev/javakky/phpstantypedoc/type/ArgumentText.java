@@ -32,7 +32,7 @@ import java.util.Set;
  * 辿った先は enum ケースか配列リテラルに限る。`$input is list<V>` の判定にはリテラルの中身が要り、
  * PhpStorm の型は連番のリテラルも `array<int, int>` として持つため型からは決められない。
  */
-final class ArgumentText {
+public final class ArgumentText {
     /** 書かれた場所によって指す先が変わる名前。完全修飾できない。 */
     private static final Set<String> RELATIVE_OWNERS = Set.of("self", "static", "parent", "$this");
 
@@ -81,7 +81,7 @@ final class ArgumentText {
      *
      * @return `list<null|int>` の形。配列リテラルでない、または要素の型が読めないときは null
      */
-    static @Nullable String literalArrayTypeOf(PsiElement argument, Project project) {
+    public static @Nullable String literalArrayTypeOf(PsiElement argument, Project project) {
         PsiElement value = argument instanceof Variable variable ? assignedCaseOf(variable) : argument;
         if (!(value instanceof ArrayCreationExpression literal)) {
             return null;

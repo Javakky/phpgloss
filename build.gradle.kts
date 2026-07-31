@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "dev.javakky"
-version = "0.55.0"
+version = "0.56.0"
 
 // 開発対象とプラグイン検証対象を同じ IDE ビルドに揃える。
 val platformVersion = "2026.2.0.1"
@@ -69,5 +69,11 @@ tasks {
         // テストクラス候補として拾われるため、`*Test` の命名規約で対象を確定させる。
         isScanForTestClasses = false
         include("**/*Test.class")
+
+        // 適合スイープの走査先を差し替えられるようにする (既定は the sample project)。
+        for (key in listOf("conformance.answers", "conformance.project", "conformance.report",
+                "conformance.directories", "conformance.reportOnly")) {
+            System.getProperty(key)?.let { systemProperty(key, it) }
+        }
     }
 }

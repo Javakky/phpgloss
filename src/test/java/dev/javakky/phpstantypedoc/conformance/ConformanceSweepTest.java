@@ -18,6 +18,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -31,14 +32,20 @@ import java.util.regex.Pattern;
  * ビルドの前提にしないため。
  */
 public final class ConformanceSweepTest extends BasePlatformTestCase {
-    private static final Path ANSWERS =
-            Path.of(System.getProperty("user.home"),
-                    "tools/conformance/out/project-types.json");
-    private static final Path PROJECT =
-            Path.of(System.getProperty("user.home"), "projects/the sample project");
-    private static final Path REPORT =
-            Path.of(System.getProperty("user.home"),
-                    "tools/conformance/out/sweep-report.md");
+    /**
+     * 走査先は差し替えられる。既定はこの plugin と同じ hobby の the sample project で、
+     * 他のプロジェクト (context の違うものを含む) を見るときは -D で渡す。
+     * その場合、レポートの置き場も呼び出し側が指定する。
+     */
+    private static final Path ANSWERS = Path.of(System.getProperty("conformance.answers",
+            System.getProperty("user.home") + "/tools/conformance/out/project-types.json"));
+    private static final Path PROJECT = Path.of(System.getProperty("conformance.project",
+            System.getProperty("user.home") + "/projects/the sample project"));
+    private static final Path REPORT = Path.of(System.getProperty("conformance.report",
+            System.getProperty("user.home") + "/tools/conformance/out/sweep-report.md"));
+    /** 走査するディレクトリ。プロジェクトによって置き場が違う。 */
+    private static final List<String> DIRECTORIES =
+            List.of(System.getProperty("conformance.directories", "src,tests").split(","));
 
     public void testSweepsEveryAssignmentAgainstPhpStan() throws IOException {
         if (!Files.exists(ANSWERS) || !Files.isDirectory(PROJECT)) {
@@ -104,8 +111,10 @@ public final class ConformanceSweepTest extends BasePlatformTestCase {
                 %s
                 """.formatted(matched, silent, conflicting, skipped, String.join("\n", rows)));
 
-        assertEquals("PHPStan と構造が食い違う推論がある。詳細は " + REPORT,
-                0, conflicting);
+        if (Boolean.getBoolean("conformance.reportOnly")) {
+            return;
+        }
+        assertEquals("PHPStan と構造が食い違う推論がある。詳細は " + REPORT, 0, conflicting);
     }
 
     /** 表の区切りと衝突する `|` を逃がす。 */
@@ -116,12 +125,20 @@ public final class ConformanceSweepTest extends BasePlatformTestCase {
     /** the sample project の src / tests を fixture に載せる。 */
     private Map<String, PsiFile> loadSources() throws IOException {
         Map<String, PsiFile> loaded = new LinkedHashMap<>();
-        for (String directory : List.of("src", "tests")) {
-            try (var paths = Files.list(PROJECT.resolve(directory))) {
+        for (String directory : DIRECTORIES) {
+            Path root = PROJECT.resolve(directory);
+            if (!Files.isDirectory(root)) {
+                continue;
+            }
+            try (var paths = Files.walk(root)) {
                 for (Path path : paths.filter(p -> p.toString().endsWith(".php")).toList()) {
-                    String relative = directory + "/" + path.getFileName();
-                    loaded.put(relative,
-                            myFixture.addFileToProject(relative, Files.readString(path)));
+                    String relative = PROJECT.relativize(path).toString();
+                    try {
+                        loaded.put(relative,
+                                myFixture.addFileToProject(relative, Files.readString(path)));
+                    } catch (Exception failure) {
+                        // 読めないファイルがあっても走査は続ける
+                    }
                 }
             }
         }
@@ -141,9 +158,16 @@ public final class ConformanceSweepTest extends BasePlatformTestCase {
                 .filter(v -> v.getTextRange().getStartOffset() >= start
                         && v.getTextRange().getStartOffset() <= end)
                 .findFirst()
-                .map(v -> String.join("|", TypeUnionSimplifier.normalize(
-                        ((PhpTypedElement) v).getType().global(getProject())
-                                .getTypesWithParametrisedParts())));
+                .map(v -> {
+                    // 表示に出る型で測る。plugin が介入しないときは PhpStorm の型がそのまま出る
+                    String shown = dev.javakky.phpstantypedoc.doc.VariableHoverProbe.typeAt(
+                            file, v.getTextRange().getStartOffset() + 1);
+                    return shown.isEmpty()
+                            ? String.join("|", TypeUnionSimplifier.normalize(
+                                    ((PhpTypedElement) v).getType().global(getProject())
+                                            .getTypesWithParametrisedParts()))
+                            : shown;
+                });
     }
 
     private enum Verdict {
@@ -155,16 +179,24 @@ public final class ConformanceSweepTest extends BasePlatformTestCase {
          * 矛盾ではない。矛盾と呼ぶのは、両者が同じ値を指しえない場合だけにする。
          */
         static Verdict of(String ours, String theirs) {
-            Shape mine = Shape.of(ours);
-            Shape expected = Shape.of(theirs);
-            if (mine == Shape.UNKNOWN) {
+            Set<Shape> mine = Shape.setOf(ours);
+            Set<Shape> expected = Shape.setOf(theirs);
+            if (mine.isEmpty()) {
                 // 型が付かなかった。PHPStan が解けているなら、こちらの取りこぼし
-                return expected == Shape.UNKNOWN ? MATCH : SILENT;
+                return expected.isEmpty() ? MATCH : SILENT;
             }
-            if (expected == Shape.UNKNOWN) {
+            if (expected.isEmpty()) {
                 return MATCH;
             }
-            return mine.compatibleWith(expected) ? MATCH : CONFLICT;
+            // union は「どれかであり得る」。ひとつでも両立する組があれば同じ値を指しうる
+            for (Shape a : mine) {
+                for (Shape b : expected) {
+                    if (a.compatibleWith(b)) {
+                        return MATCH;
+                    }
+                }
+            }
+            return CONFLICT;
         }
     }
 
@@ -208,11 +240,53 @@ public final class ConformanceSweepTest extends BasePlatformTestCase {
         private static final Pattern LIST_LIKE = Pattern.compile("(^|\\|)\\\\?(non-empty-)?list<");
         private static final Pattern KEYED = Pattern.compile("(^|\\|)\\\\?(non-empty-)?array<([^,>]+),");
 
+        /**
+         * union を成分ごとに分けた形の集合。`null` と型の付かない成分は判定に使わない
+         * (`non-empty-list|null` と `null|array` は同じ値を指しうる)。
+         */
+        static Set<Shape> setOf(String type) {
+            Set<Shape> shapes = new java.util.LinkedHashSet<>();
+            for (String member : splitUnion(type)) {
+                Shape shape = of(member);
+                if (shape != UNKNOWN && shape != NULL_ONLY) {
+                    shapes.add(shape);
+                }
+            }
+            return shapes;
+        }
+
+        /** 最上位の `|` で分ける。型引数や shape の中の `|` は区切りにしない。 */
+        private static List<String> splitUnion(String type) {
+            List<String> members = new ArrayList<>();
+            int depth = 0;
+            int start = 0;
+            for (int i = 0; i < type.length(); i++) {
+                char c = type.charAt(i);
+                if (c == '<' || c == '{' || c == '(') {
+                    depth++;
+                } else if (c == '>' || c == '}' || c == ')') {
+                    depth--;
+                } else if (c == '|' && depth == 0) {
+                    members.add(type.substring(start, i));
+                    start = i + 1;
+                }
+            }
+            members.add(type.substring(start));
+            return members.stream().map(String::trim).filter(m -> !m.isEmpty()).toList();
+        }
+
         static Shape of(String type) {
             String normalized = type.trim().toLowerCase().replace("\\", "");
-            if (normalized.isEmpty() || normalized.equals("mixed") || normalized.equals("?")
-                    || normalized.equals("mixed|null") || normalized.equals("null|mixed")) {
+            if (normalized.isEmpty() || normalized.startsWith("mixed") || normalized.equals("?")
+                    || normalized.equals("null|mixed")) {
+                // `mixed~object` は PHPStan の型減算。mixed の一種で、こちらは表せない
                 return UNKNOWN;
+            }
+            if (normalized.equals("list") || normalized.equals("non-empty-list")) {
+                return SEQUENTIAL;
+            }
+            if (normalized.equals("array") || normalized.equals("iterable")) {
+                return ANY_ARRAY;
             }
             if (normalized.equals("null")) {
                 return NULL_ONLY;
@@ -247,9 +321,17 @@ public final class ConformanceSweepTest extends BasePlatformTestCase {
             if (body.isBlank()) {
                 return ANY_ARRAY;
             }
-            if (!body.contains(":")) {
+            // 外側のキーだけを見る。入れ子の shape と文字列リテラル (URL の `:` 等) の中は数えない
+            String outer = body.replaceAll("'[^']*'", "''").replaceAll("\"[^\"]*\"", "''");
+            String previous;
+            do {
+                previous = outer;
+                outer = outer.replaceAll("\\{[^{}]*}", "");
+            } while (!outer.equals(previous));
+            if (!outer.contains(":")) {
                 return SEQUENTIAL;
             }
+            body = outer;
             // `array{10: 'a', 20: 'b'}` のように数字キーが書かれる。連番ではないが整数キーではある
             boolean allNumeric = true;
             for (String entry : body.split(",")) {
