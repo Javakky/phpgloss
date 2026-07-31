@@ -107,6 +107,45 @@ final class TemplateUnification {
         return null;
     }
 
+    /**
+     * 書かれた型どうしを構造で照合する。`list<V>` × `list<positive-int>` → `V = positive-int`。
+     *
+     * <p>PhpStorm の型を経由すると `positive-int` のような精密化が `int` に潰れるため、
+     * `@var` に書かれた型はテキストのまま照合する。基底名が一致する総称型だけを対応させ、
+     * 判断できない形では何も束縛しない。
+     */
+    static void unifyText(
+            String declared,
+            String written,
+            Collection<String> templates,
+            Map<String, String> bindings
+    ) {
+        if (declared == null || written == null) {
+            return;
+        }
+        String declaredTrimmed = declared.trim();
+        String writtenTrimmed = written.trim();
+        List<String> alternatives = PhpType.splitTopLevelUnion(declaredTrimmed);
+        if (alternatives.size() > 1) {
+            alternatives.forEach(alternative -> unifyText(alternative, writtenTrimmed, templates, bindings));
+            return;
+        }
+        if (templates.contains(declaredTrimmed)) {
+            bindings.putIfAbsent(declaredTrimmed, writtenTrimmed);
+            return;
+        }
+        TypeUnionSimplifier.ArrayShape declaredShape = TypeUnionSimplifier.arrayShapeOf(declaredTrimmed);
+        TypeUnionSimplifier.ArrayShape writtenShape = TypeUnionSimplifier.arrayShapeOf(writtenTrimmed);
+        if (declaredShape == null || writtenShape == null
+                || !declaredShape.base().equals(writtenShape.base())
+                || declaredShape.arguments().size() != writtenShape.arguments().size()) {
+            return;
+        }
+        for (int i = 0; i < declaredShape.arguments().size(); i++) {
+            unifyText(declaredShape.arguments().get(i), writtenShape.arguments().get(i), templates, bindings);
+        }
+    }
+
     static Map<String, String> empty() {
         return new LinkedHashMap<>();
     }

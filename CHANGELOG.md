@@ -11,6 +11,12 @@
 
 
 
+## 0.48.0
+
+- Keep a refinement written in `@var` — `list<positive-int>` gave `null|int`, because PhpStorm's type flattens `positive-int` to `int` before anything can read it. The written text survives nowhere else, so it is read from the PHPDoc and matched structurally against the declared parameter (`list<V>` × `list<positive-int>` binds `V`), and carried through the indexing pass alongside the argument.
+- Resolve a plain template return (`@return V|null`) instead of leaving it to PhpStorm, which resolves `V` but only to the flattened type. Returns that mention no type variable at all are still left alone.
+- Split the substituted return on `|` before adding it, and substitute before qualifying so a bare unresolved `V` cannot slip through as a class name.
+
 ## 0.47.0
 
 - Keep the standard hover chrome — the namespace link, the coloured variable name, the clickable source — when fixing the type. The patch looked for the literal `$name:`, which never matches because the standard HTML wraps the name in a coloured span, so every hover fell back to the bare minimal page (reported on the real machine). The colon is now found by skipping over tags, and the inserted type text links its class names and keywords.

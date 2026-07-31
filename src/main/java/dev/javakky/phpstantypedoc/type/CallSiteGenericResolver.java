@@ -43,6 +43,8 @@ final class CallSiteGenericResolver {
     private static final char FIELD = 'ᨤ';
     /** 引数の「型」と「書かれたテキスト」を区切る文字。条件型の判定にテキストが要る。 */
     private static final char SUBFIELD = 'ᨦ';
+    /** 「書かれたテキスト」と「@var に書かれた型」を区切る文字。精密化はテキストにしか残らない。 */
+    private static final char VAR_FIELD = 'ᨬ';
     /** メソッド呼び出しであることを表す印。続けてレシーバのシグネチャを持つ。 */
     private static final char METHOD = 'ᨧ';
     /**
@@ -81,6 +83,12 @@ final class CallSiteGenericResolver {
             }
             // 条件型は実引数の値 (`Shape::AS_LIST`) で分岐するため、型だけでは足りない
             encoded.append(SUBFIELD).append(escapeSignature(ArgumentText.of(argument)));
+            String written = ArgumentText.writtenVarTypeOf(argument);
+            if (written != null) {
+                // `@var list<positive-int>` の精密化は PhpStorm の型に残らないため、書かれた
+                // テキストを運ぶ。読み取りはローカル PSI だけで済むので索引中でも行える
+                encoded.append(VAR_FIELD).append(escapeSignature(written));
+            }
         }
         return encoded.toString();
     }
@@ -135,7 +143,8 @@ final class CallSiteGenericResolver {
         List<Argument> arguments = new ArrayList<>();
         for (PsiElement argument : reference.getParameters()) {
             String signature = argument instanceof PhpTypedElement typed ? signatureOf(typed) : "";
-            arguments.add(new Argument(signature, ArgumentText.of(argument)));
+            arguments.add(new Argument(
+                    signature, ArgumentText.of(argument), ArgumentText.writtenVarTypeOf(argument)));
         }
         return arguments;
     }
@@ -270,8 +279,8 @@ final class CallSiteGenericResolver {
         Parameter[] parameters = function.getParameters();
         CallSite callSite = new CallSite(project, function, parameters, arguments);
         String declaredReturn = returnExpressionOf(doc, callSite);
-        if (declaredReturn == null || !declaredReturn.contains("<")) {
-            // 型引数を持たない戻り値は PhpStorm が既に解いている
+        if (declaredReturn == null || !mentionsTemplate(declaredReturn, templates)) {
+            // 型変数を含まない戻り値は PhpStorm が既に解いている
             return null;
         }
         Map<String, String> bindings = TemplateUnification.empty();
@@ -279,7 +288,16 @@ final class CallSiteGenericResolver {
         for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
             String declared = declaredParamOf(doc, callSite, parameters[i].getName());
             String signature = arguments.get(i).signature();
-            if (declared == null || signature.isBlank()) {
+            if (declared == null) {
+                continue;
+            }
+            String written = arguments.get(i).writtenVarType();
+            if (written != null) {
+                // `@var list<positive-int>` の精密化は PhpStorm の型には残らない (int に潰れる)。
+                // 書かれた型どうしを構造で照合して先に束縛する
+                TemplateUnification.unifyText(declared, written, templates, bindings);
+            }
+            if (signature.isBlank()) {
                 continue;
             }
             TemplateUnification.unify(declared, actualTypeOf(project, signature), templates, bindings);
@@ -288,16 +306,28 @@ final class CallSiteGenericResolver {
         if (bindings.isEmpty()) {
             return null;
         }
-        String substituted = TemplateSubstitution.apply(qualify(declaredReturn, function), bindings);
+        // 置換を先に行う。修飾が先だと裸の型変数 `V` が `\Probe\V` に化け、
+        // 未解決の検出 (語としての `V` を探す) をすり抜けて型として漏れる
+        String substituted = PhpType.splitTopLevelUnion(declaredReturn).stream()
+                .map(part -> qualify(TemplateSubstitution.apply(part.trim(), bindings), function))
+                .reduce((a, b) -> a + "|" + b)
+                .orElse(null);
+        if (substituted == null) {
+            return null;
+        }
         if (TemplateSubstitution.hasUnresolved(substituted, templates)) {
             // 型変数が残ったままの型は出さない。読み手に意味がないため
             return null;
         }
-        PhpType resolved = new PhpType().add(substituted);
-        String plural = TemplateSubstitution.pluralFormOf(substituted);
-        if (plural != null) {
-            // 要素アクセスが読める形も足す。総称の形は残すので精度は落ちない
-            resolved.add(plural);
+        // `positive-int|null` を 1 成分のまま add すると union として扱われない。分けて足す
+        PhpType resolved = new PhpType();
+        for (String part : PhpType.splitTopLevelUnion(substituted)) {
+            resolved.add(part);
+            String plural = TemplateSubstitution.pluralFormOf(part);
+            if (plural != null) {
+                // 要素アクセスが読める形も足す。総称の形は残すので精度は落ちない
+                resolved.add(plural);
+            }
         }
         return resolved;
     }
@@ -491,14 +521,43 @@ final class CallSiteGenericResolver {
     /**
      * 実引数一つ分。条件型の判定には書かれたテキストが要る。
      */
-    private record Argument(String signature, String text) {
+    private record Argument(String signature, String text, @Nullable String writtenVarType) {
+        Argument(String signature, String text) {
+            this(signature, text, null);
+        }
+
         static Argument parse(String encoded) {
             int separator = encoded.indexOf(SUBFIELD);
-            return separator < 0
-                    ? new Argument(unescapeSignature(encoded), "")
-                    : new Argument(unescapeSignature(encoded.substring(0, separator)),
-                            unescapeSignature(encoded.substring(separator + 1)));
+            if (separator < 0) {
+                return new Argument(unescapeSignature(encoded), "");
+            }
+            String rest = encoded.substring(separator + 1);
+            int varAt = rest.indexOf(VAR_FIELD);
+            return new Argument(
+                    unescapeSignature(encoded.substring(0, separator)),
+                    unescapeSignature(varAt < 0 ? rest : rest.substring(0, varAt)),
+                    varAt < 0 ? null : unescapeSignature(rest.substring(varAt + 1)));
         }
+    }
+
+    /**
+     * 戻り値の宣言に型変数が語として現れるか。現れないなら PhpStorm の解決に任せる。
+     */
+    private static boolean mentionsTemplate(String declared, Collection<String> templates) {
+        for (String template : templates) {
+            int at = declared.indexOf(template);
+            while (at >= 0) {
+                boolean leftFree = at == 0 || !Character.isLetterOrDigit(declared.charAt(at - 1));
+                int right = at + template.length();
+                boolean rightFree = right >= declared.length()
+                        || !(Character.isLetterOrDigit(declared.charAt(right)) || declared.charAt(right) == '_');
+                if (leftFree && rightFree) {
+                    return true;
+                }
+                at = declared.indexOf(template, at + 1);
+            }
+        }
+        return false;
     }
 
     /**

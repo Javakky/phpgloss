@@ -66,6 +66,44 @@ final class ArgumentText {
     }
 
     /**
+     * 変数の直前に書かれた `@var` の型を、書かれたテキストのまま読む。
+     *
+     * <p>`@var list<positive-int>` の `positive-int` は PhpStorm の型としては `int` に潰れて残らない
+     * (実測: global 型は `\array` のみ)。精密化を保つには書かれた文字列を読むしかない。
+     *
+     * @return 書かれた型。`@var` が無い、または代入を 1 段で辿れないときは null
+     */
+    static @Nullable String writtenVarTypeOf(PsiElement argument) {
+        if (!(argument instanceof Variable variable)) {
+            return null;
+        }
+        Function scope = PsiTreeUtil.getParentOfType(variable, Function.class);
+        String name = variable.getName();
+        if (scope == null || name == null) {
+            return null;
+        }
+        for (AssignmentExpression assignment
+                : PsiTreeUtil.findChildrenOfType(scope, AssignmentExpression.class)) {
+            if (!(assignment.getVariable() instanceof Variable left) || !name.equals(left.getName())) {
+                continue;
+            }
+            PsiElement statement = assignment.getParent();
+            for (PsiElement sibling = statement == null ? null : statement.getPrevSibling();
+                    sibling != null; sibling = sibling.getPrevSibling()) {
+                if (sibling instanceof com.intellij.psi.PsiWhiteSpace) {
+                    continue;
+                }
+                if (sibling instanceof com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment doc) {
+                    return dev.javakky.phpstantypedoc.parser.PhpDocDeclaredTypeReader.typeNameFor(
+                            doc, dev.javakky.phpstantypedoc.parser.PhpDocDeclaredTypeReader.VAR_TAGS, name);
+                }
+                break;
+            }
+        }
+        return null;
+    }
+
+    /**
      * 変数に代入された enum ケースを 1 段だけ辿る。
      *
      * <p>関数の本体に直接書かれた代入が、呼び出しより前に 1 つだけあるときに限る。複数回の代入や
