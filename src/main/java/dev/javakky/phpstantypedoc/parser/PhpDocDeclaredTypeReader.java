@@ -23,6 +23,105 @@ public final class PhpDocDeclaredTypeReader {
     }
 
     /**
+     * タグに書かれた型を、union を含めて丸ごと読む。
+     *
+     * <p>{@link #typeNameFor} は {@code PhpDocType} 経由のため union の先頭しか返さない
+     * (実測: `@return V|null` が `V` になる)。こちらはタグのテキストから直接読み、
+     * 型引数の中でない空白 (説明文の始まり) で切る。`V | null` のように空白を挟んだ union も繋ぐ。
+     *
+     * @param variableName `@param` / `@var` で変数名を絞る場合は `$` を除いた名前。絞らないなら null
+     */
+    public static String unionTypeFor(PhpDocComment doc, List<String> tagNames, String variableName) {
+        if (doc == null) {
+            return null;
+        }
+        for (String tagName : tagNames) {
+            for (var element : doc.getTagElementsByName(tagName)) {
+                String text = element.getText();
+                String body = stripDecoration(text.substring(text.indexOf(tagName) + tagName.length()));
+                if (variableName != null) {
+                    int variable = body.indexOf("$" + variableName);
+                    if (variable < 0) {
+                        continue;
+                    }
+                    body = body.substring(0, variable);
+                }
+                String type = firstUnionTokenOf(body.trim());
+                if (!type.isEmpty()) {
+                    return type;
+                }
+            }
+        }
+        return null;
+    }
+
+    /**
+     * 複数行の型から PHPDoc の飾り (行頭の `*`) を落として 1 行にする。
+     */
+    private static String stripDecoration(String body) {
+        StringBuilder result = new StringBuilder();
+        for (String line : body.split("\n")) {
+            String trimmed = line.trim();
+            if (trimmed.startsWith("*")) {
+                trimmed = trimmed.substring(1).trim();
+            }
+            if (trimmed.endsWith("*/")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 2).trim();
+            }
+            if (!trimmed.isEmpty()) {
+                if (!result.isEmpty()) {
+                    result.append(' ');
+                }
+                result.append(trimmed);
+            }
+        }
+        return result.toString();
+    }
+
+    /**
+     * 先頭の型を、空白区切りの説明文の手前まで読む。`|` が続く限り次の語も型として繋ぐ。
+     */
+    private static String firstUnionTokenOf(String body) {
+        StringBuilder type = new StringBuilder();
+        int cursor = 0;
+        while (cursor < body.length()) {
+            int depth = 0;
+            int start = cursor;
+            while (cursor < body.length()) {
+                char c = body.charAt(cursor);
+                if (c == '<' || c == '{' || c == '(') {
+                    depth++;
+                } else if (c == '>' || c == '}' || c == ')') {
+                    depth--;
+                } else if (depth == 0 && Character.isWhitespace(c)) {
+                    break;
+                }
+                cursor++;
+            }
+            type.append(body, start, cursor);
+            // 空白の先が `|` なら union の続き。`V | null 説明` を最後まで繋ぐ
+            int next = cursor;
+            while (next < body.length() && Character.isWhitespace(body.charAt(next))) {
+                next++;
+            }
+            boolean continues = type.length() > 0 && type.charAt(type.length() - 1) == '|';
+            if (next < body.length() && (body.charAt(next) == '|' || continues)) {
+                if (body.charAt(next) == '|') {
+                    type.append('|');
+                    next++;
+                    while (next < body.length() && Character.isWhitespace(body.charAt(next))) {
+                        next++;
+                    }
+                }
+                cursor = next;
+                continue;
+            }
+            break;
+        }
+        return type.toString();
+    }
+
+    /**
      * @param variableName 変数名で絞る場合は `$` を除いた名前。絞らない場合は null
      */
     public static String typeNameFor(PhpDocComment doc, List<String> tagNames, String variableName) {

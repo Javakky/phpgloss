@@ -11,6 +11,12 @@
 
 
 
+## 0.50.0
+
+- Read every declared union whole. The parsed doc type yields only the first member — measured on `@param`, `@return` and `@var` alike — so `array<K, V>` written after `list<V>|` was never seen (which is why the key never bound from the arguments), `@var User|null` lost its null, and an `__invoke` returning `V|null` claimed the value always exists. One raw reader now serves all of them, keeping `V | null` spelled with spaces and cutting before the trailing description.
+- Split the `__invoke` return on `|` before adding it, the same fix the call-site path already had.
+- Give up on `@var` when the variable is assigned more than once; which annotation governs the call site cannot be told.
+
 ## 0.49.0
 
 - Keep the `|null` of an option-style return. `@return V|null` was read through the parsed doc type, which yields only the first member of a union, so the resolved type claimed the value always exists. The whole written union is now read raw, cut off before the trailing description.

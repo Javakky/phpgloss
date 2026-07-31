@@ -368,12 +368,12 @@ final class CallSiteGenericResolver {
                 return folded;
             }
         }
-        String declared = PhpDocDeclaredTypeReader.typeNameFor(
+        String declared = PhpDocDeclaredTypeReader.unionTypeFor(
                 doc, PhpDocDeclaredTypeReader.PARAM_TAGS, parameterName);
         if (declared == null || !(declared.trim().startsWith("(") || declared.contains(" is "))) {
             return declared;
         }
-        return PhpDocDeclaredTypeReader.typeNameFor(doc, List.of("@param"), parameterName);
+        return PhpDocDeclaredTypeReader.unionTypeFor(doc, List.of("@param"), parameterName);
     }
 
     /**
@@ -461,7 +461,7 @@ final class CallSiteGenericResolver {
             // union の先頭しか返さず、`|null` が落ちる (実測: Option 型の null が消えた)
             return firstTypeTokenOf(raw);
         }
-        return PhpDocDeclaredTypeReader.typeNameFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
+        return PhpDocDeclaredTypeReader.unionTypeFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
     }
 
     /**

@@ -82,23 +82,28 @@ final class ArgumentText {
         if (scope == null || name == null) {
             return null;
         }
+        AssignmentExpression single = null;
         for (AssignmentExpression assignment
                 : PsiTreeUtil.findChildrenOfType(scope, AssignmentExpression.class)) {
-            if (!(assignment.getVariable() instanceof Variable left) || !name.equals(left.getName())) {
+            if (assignment.getVariable() instanceof Variable left && name.equals(left.getName())) {
+                if (single != null) {
+                    // 複数回代入される変数は、呼び出し時点でどの @var が効いているか決められない
+                    return null;
+                }
+                single = assignment;
+            }
+        }
+        PsiElement statement = single == null ? null : single.getParent();
+        for (PsiElement sibling = statement == null ? null : statement.getPrevSibling();
+                sibling != null; sibling = sibling.getPrevSibling()) {
+            if (sibling instanceof com.intellij.psi.PsiWhiteSpace) {
                 continue;
             }
-            PsiElement statement = assignment.getParent();
-            for (PsiElement sibling = statement == null ? null : statement.getPrevSibling();
-                    sibling != null; sibling = sibling.getPrevSibling()) {
-                if (sibling instanceof com.intellij.psi.PsiWhiteSpace) {
-                    continue;
-                }
-                if (sibling instanceof com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment doc) {
-                    return dev.javakky.phpstantypedoc.parser.PhpDocDeclaredTypeReader.typeNameFor(
-                            doc, dev.javakky.phpstantypedoc.parser.PhpDocDeclaredTypeReader.VAR_TAGS, name);
-                }
-                break;
+            if (sibling instanceof com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment doc) {
+                return dev.javakky.phpstantypedoc.parser.PhpDocDeclaredTypeReader.unionTypeFor(
+                        doc, dev.javakky.phpstantypedoc.parser.PhpDocDeclaredTypeReader.VAR_TAGS, name);
             }
+            break;
         }
         return null;
     }

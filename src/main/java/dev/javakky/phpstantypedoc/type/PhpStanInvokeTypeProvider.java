@@ -167,7 +167,7 @@ public final class PhpStanInvokeTypeProvider implements PhpTypeProvider4 {
         PhpDocComment doc = invoke.getDocComment();
         String declared = doc == null
                 ? null
-                : PhpDocDeclaredTypeReader.typeNameFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
+                : PhpDocDeclaredTypeReader.unionTypeFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
         if (declared == null) {
             return null;
         }
@@ -205,10 +205,14 @@ public final class PhpStanInvokeTypeProvider implements PhpTypeProvider4 {
      * 要素アクセスが読める形も足す。総称の形は残すので精度は落ちない。
      */
     private static PhpType withPluralForm(String type) {
-        PhpType resolved = new PhpType().add(type);
-        String plural = TemplateSubstitution.pluralFormOf(type);
-        if (plural != null) {
-            resolved.add(plural);
+        // union を 1 成分のまま add すると union として扱われない。分けて足す
+        PhpType resolved = new PhpType();
+        for (String part : PhpType.splitTopLevelUnion(type)) {
+            resolved.add(part);
+            String plural = TemplateSubstitution.pluralFormOf(part);
+            if (plural != null) {
+                resolved.add(plural);
+            }
         }
         return resolved;
     }
