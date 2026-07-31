@@ -100,6 +100,10 @@ final class CallSiteGenericResolver {
             // 条件型は実引数の値 (`Shape::AS_LIST`) で分岐するため、型だけでは足りない
             encoded.append(SUBFIELD).append(escapeSignature(ArgumentText.of(argument)));
             String written = ArgumentText.writtenVarTypeOf(argument);
+            if (written == null) {
+                // 書かれた `@var` が無くても、書かれたリテラルからは要素型が組み立てられる
+                written = ArgumentText.literalArrayTypeOf(argument, reference.getProject());
+            }
             if (written != null) {
                 // `@var list<positive-int>` の精密化は PhpStorm の型に残らないため、書かれた
                 // テキストを運ぶ。読み取りはローカル PSI だけで済むので索引中でも行える
@@ -198,6 +202,15 @@ final class CallSiteGenericResolver {
         return result.isEmpty() ? null : result;
     }
 
+    /**
+     * 実引数の型として書かれているもの。`@var` が優先で、無ければ書かれたリテラルから組み立てる。
+     * どちらも PhpStorm の型には残らない精度を持つ。
+     */
+    private static @Nullable String writtenTypeOf(PsiElement argument, Project project) {
+        String written = ArgumentText.writtenVarTypeOf(argument);
+        return written != null ? written : ArgumentText.literalArrayTypeOf(argument, project);
+    }
+
     private static List<Argument> argumentsOf(FunctionReference reference) {
         List<Argument> arguments = new ArrayList<>();
         for (PsiElement argument : reference.getParameters()) {
@@ -205,7 +218,7 @@ final class CallSiteGenericResolver {
             arguments.add(new Argument(
                     signature,
                     ArgumentText.of(argument),
-                    ArgumentText.writtenVarTypeOf(argument),
+                    writtenTypeOf(argument, reference.getProject()),
                     argumentNameOf(argument),
                     isSpread(argument)));
         }

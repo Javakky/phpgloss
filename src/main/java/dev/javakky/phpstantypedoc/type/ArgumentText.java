@@ -3,7 +3,10 @@ package dev.javakky.phpstantypedoc.type;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.intellij.openapi.project.Project;
 import com.jetbrains.php.lang.psi.elements.ArrayCreationExpression;
+import com.jetbrains.php.lang.psi.elements.ArrayHashElement;
+import com.jetbrains.php.lang.psi.elements.PhpTypedElement;
 import com.jetbrains.php.lang.psi.elements.AssignmentExpression;
 import com.jetbrains.php.lang.psi.elements.ClassConstantReference;
 import com.jetbrains.php.lang.psi.elements.ControlStatement;
@@ -17,6 +20,7 @@ import dev.javakky.phpstantypedoc.parser.PhpFileModelCache;
 import dev.javakky.phpstantypedoc.resolution.ClassNameResolver;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
@@ -66,6 +70,61 @@ final class ArgumentText {
         PhpFileModel model = PhpFileModelCache.of(file);
         String resolved = new ClassNameResolver().resolve(owner, model.namespace(), model.uses());
         return resolved == null ? null : "\\" + resolved + trimmed.substring(separator);
+    }
+
+    /**
+     * 実引数に書かれた配列リテラルから、その形と要素型を組み立てる。
+     *
+     * <p>PhpStorm は `[null, 1, 2]` を `array<int, mixed>` として持つ。要素の型が混ざると
+     * `mixed` に潰れ、そこから束縛した型変数も `mixed` になる。書かれた要素はそれぞれ型が
+     * 分かるので、union として組み直す。
+     *
+     * @return `list<null|int>` の形。配列リテラルでない、または要素の型が読めないときは null
+     */
+    static @Nullable String literalArrayTypeOf(PsiElement argument, Project project) {
+        PsiElement value = argument instanceof Variable variable ? assignedCaseOf(variable) : argument;
+        if (!(value instanceof ArrayCreationExpression literal)) {
+            return null;
+        }
+        Set<String> elements = new LinkedHashSet<>();
+        Set<String> keys = new LinkedHashSet<>();
+        boolean keyed = false;
+        // `getChildren()` は配列リテラルの要素を返さない (実測で空)。兄弟を辿る
+        for (PsiElement child = literal.getFirstChild(); child != null; child = child.getNextSibling()) {
+            PsiElement element = child;
+            if (child instanceof ArrayHashElement hash) {
+                keyed = true;
+                element = hash.getValue();
+                // キーの型も書かれている。`array-key` で埋めると実引数から取れた型より粗くなる
+                if (hash.getKey() instanceof PhpTypedElement key) {
+                    keys.addAll(key.getType().global(project).getTypes());
+                }
+            }
+            // 要素は型を持たないラッパーに包まれている (実測: PhpPsiElementImpl)。中の式を取る
+            PhpTypedElement typed = element instanceof PhpTypedElement direct
+                    ? direct : PsiTreeUtil.findChildOfType(element, PhpTypedElement.class);
+            if (typed == null) {
+                continue;
+            }
+            for (String type : typed.getType().global(project).getTypes()) {
+                // 要素そのものが読めないなら、union に混ぜると全体を粗くしてしまう
+                if (type.isBlank() || type.equals("?") || type.endsWith("mixed")) {
+                    return null;
+                }
+                elements.add(type);
+            }
+        }
+        if (elements.isEmpty()) {
+            return null;
+        }
+        String elementType = String.join("|", elements);
+        if (!keyed) {
+            return "list<" + elementType + ">";
+        }
+        // キーが読めないなら組み立てない。粗い上界で埋めると、実引数から取れる型を上書きしてしまう
+        return keys.isEmpty() || keys.stream().anyMatch(k -> k.isBlank() || k.endsWith("mixed"))
+                ? null
+                : "array<" + String.join("|", keys) + ", " + elementType + ">";
     }
 
     /**

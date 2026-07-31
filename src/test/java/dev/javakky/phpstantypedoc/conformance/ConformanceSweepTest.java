@@ -91,6 +91,14 @@ public final class ConformanceSweepTest extends BasePlatformTestCase {
                 - **矛盾 (構造が食い違う。バグの候補)**: %d
                 - 測れず (fixture 環境で PHP 標準の解決が落ちた): %d
 
+                沈黙のうち、次の 2 つはこちらの漏れではない。
+
+                - **上界の無い型変数** (`@template E` のみ) — PHPStan は `E (function ...)` と型変数の
+                  ままを表示するが、PhpStorm の型には型変数を表す形が無い。上界があればそこまでは
+                  言えるので (`@template G of array-key` は int と string)、無いものだけが残る
+                - **PHP 標準関数の戻り値** (`array_key_first` / `array_is_list` / `fopen` 等) —
+                  fixture には PHP の stub が無いため、この走査では測れないだけ。実機では PhpStorm が解く
+
                 | 判定 | 位置 | 変数 | PHPStan | このプラグイン |
                 |---|---|---|---|---|
                 %s

@@ -11,6 +11,12 @@
 
 
 
+## 0.55.0
+
+- Build the element type of an array literal from what is written. PhpStorm holds `[null, 1, 2]` as `array<int, mixed>`, and a type variable bound from it collapsed to `mixed`; the written elements each have a readable type, so they are joined into a union instead. Keys are read the same way, and nothing is built when an element or key is itself unreadable — a coarse guess there would overwrite what the arguments already give.
+- Type the result of calling a callable parameter inside the function body. `$classifier($value, $key)` had no type at all; the PHPDoc states the return position, and while the caller is unknown the bound of the type variable can still be said (`@template G of array-key` → `int|string`, which is what PHPStan shows as `G of (int|string)`). A type variable with no bound says nothing rather than `mixed`.
+- Read the return type of `callable(V, K): G`. The declared-type reader cut at the space after the colon, so the return position was lost.
+
 ## 0.54.0
 
 - Follow an array literal assigned to a variable when a condition asks about its shape. `groupBy($input, ...)` decides on `$input is list<V>`, and PhpStorm holds even a sequential literal as `array<int, int>`, so the shape could not be told from the type — the whole call stayed unresolved and PhpStorm's own answer (`array<int, int>[]`: the group key taken from the input's key type, the value from the element type) was shown instead. Only enum cases and array literals are followed; nothing else states its value in the source.

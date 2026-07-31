@@ -104,9 +104,19 @@ public final class PhpDocDeclaredTypeReader {
             while (next < body.length() && Character.isWhitespace(body.charAt(next))) {
                 next++;
             }
-            boolean continues = type.length() > 0 && type.charAt(type.length() - 1) == '|';
-            if (next < body.length() && (body.charAt(next) == '|' || continues)) {
-                if (body.charAt(next) == '|') {
+            // `callable(V, K): G` の戻り型は `:` の先にある。`:` の直後で切ると型が落ちる
+            char last = type.isEmpty() ? ' ' : type.charAt(type.length() - 1);
+            boolean continues = last == '|' || last == ':' || last == '&';
+            if (next < body.length()
+                    && (body.charAt(next) == '|' || body.charAt(next) == ':' || continues)) {
+                if (body.charAt(next) == ':' && last != ':') {
+                    type.append(':');
+                    next++;
+                    while (next < body.length() && Character.isWhitespace(body.charAt(next))) {
+                        next++;
+                    }
+                }
+                if (next < body.length() && body.charAt(next) == '|') {
                     type.append('|');
                     next++;
                     while (next < body.length() && Character.isWhitespace(body.charAt(next))) {
