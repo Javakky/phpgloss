@@ -11,6 +11,15 @@
 
 
 
+## 0.53.0
+
+- Evaluate a negated condition, `($mode is not Shape::AS_LIST ? A : B)`. The two-word `is not` form was read as a condition of its own, and the type it produced was a class named after the word (`\Probe\not` — measured). The decision is the plain one with its truth flipped, so a condition that cannot be decided stays undecided rather than picking the other branch.
+- Bind a variadic parameter from every argument written for it. `@param V ...$values` only ever saw the first one, so `collect(1, 'a')` claimed `list<int>`; the arguments from the variadic position onwards are now unioned into the one declared element type. An argument passed as `...$arr` binds nothing at all: how many values of which types it carries cannot be told from the call.
+- Unify an intersection, `@param T&Countable $subject`. Neither part is a type variable on its own, so nothing bound and the whole return went unresolved. The parts that are not type variables are matching conditions — subtracted from the argument type when it carries them, and unified in their own right so a type variable nested in one (`iterable<V>&Countable`) still binds. Two type variables in one intersection bind nothing, and each member of an intersection return is qualified separately (resolving `Bag&Boxed` whole looks for a class of that name).
+- Qualify a class-name bound. `@template T of Wrapper` filled the variable with the short name, which reads as a class that does not exist; it now goes through the same namespace/use resolution as the rest of the declaration. Keyword bounds (`array-key`) are left alone.
+- Fold a conditional whose subject is a type variable, `(R is null ? (?V) : R)` — the real `reduce`. Only `$parameter` subjects were read, so the branch text leaked out as a type (measured: `\Probe\(\int is null ? (?\int) : \int)`). The return is now folded after the arguments have been unified, since that is when `R` is known; a missing argument binds from the declared default (`$initial = null` makes the condition true), `?V` is spelled as a union because `?` alone means "no type" to PhpStorm, and an argument whose type may or may not be null decides nothing.
+- Stop adding a plural form for a union element. `list<int|string>` would have added `int|string[]`, which reads as a different type.
+
 ## 0.52.0
 
 - Bind the element type of a `map`-style call from the closure passed to it. `@param callable(V, K): E $callback` never bound `E`, so every conditional return mentioning it stayed unresolved. PhpStorm already carries the closure's shape in the argument type — `fn (int $v): string` measures as `\Closure<#ᤓvᤓ\int,\string>` — and puts only the *written* declaration in each parameter slot, the written-or-inferred type in the last. That is exactly the wanted rule: parameters bind from what was written, the return falls back to what PhpStorm inferred. A callable carrying no shape (`strlen(...)`, `'strlen'`) binds nothing rather than guessing.

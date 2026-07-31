@@ -51,8 +51,10 @@ final class CallSiteGenericResolver {
     private static final char VAR_FIELD = 'ᨬ';
     /** 名前付き引数 (`mode: Shape::AS_LIST`) の名前を区切る文字。 */
     private static final char NAME_FIELD = 'ᨭ';
-    /** {@link #VAR_FIELD} と {@link #NAME_FIELD}。どちらも書かれたときだけ現れる。 */
-    private static final String OPTIONAL_FIELDS = "" + VAR_FIELD + NAME_FIELD;
+    /** 展開して渡された引数 (`...$args`) の印。値は持たない。 */
+    private static final char SPREAD_FIELD = 'ᨮ';
+    /** 書かれたときだけ現れる欄。 */
+    private static final String OPTIONAL_FIELDS = "" + VAR_FIELD + NAME_FIELD + SPREAD_FIELD;
     /** メソッド呼び出しであることを表す印。続けてレシーバのシグネチャを持つ。 */
     private static final char METHOD = 'ᨧ';
     /**
@@ -107,8 +109,20 @@ final class CallSiteGenericResolver {
             if (name != null) {
                 encoded.append(NAME_FIELD).append(escapeSignature(name));
             }
+            if (isSpread(argument)) {
+                encoded.append(SPREAD_FIELD);
+            }
         }
         return encoded.toString();
+    }
+
+    /**
+     * `...$args` として展開された実引数か。中身が何個の何型かは呼び出し側からは分からないため、
+     * ここに当たる仮引数へは何も束縛しない。
+     */
+    private static boolean isSpread(PsiElement argument) {
+        PsiElement previous = previousMeaningful(argument);
+        return previous != null && "...".equals(previous.getText());
     }
 
     /**
@@ -192,7 +206,8 @@ final class CallSiteGenericResolver {
                     signature,
                     ArgumentText.of(argument),
                     ArgumentText.writtenVarTypeOf(argument),
-                    argumentNameOf(argument)));
+                    argumentNameOf(argument),
+                    isSpread(argument)));
         }
         return arguments;
     }
@@ -328,18 +343,21 @@ final class CallSiteGenericResolver {
         if (templates.isEmpty()) {
             return null;
         }
-        Parameter[] parameters = function.getParameters();
-        List<Argument> byParameter = alignedArguments(parameters, arguments);
-        CallSite callSite = new CallSite(project, function, parameters, byParameter);
-        String declaredReturn = returnExpressionOf(doc, callSite);
-        if (declaredReturn == null || !mentionsTemplate(declaredReturn, templates)) {
+        String rawReturn = returnDeclarationOf(doc);
+        if (rawReturn == null || !mentionsTemplate(rawReturn, templates)) {
             // 型変数を含まない戻り値は PhpStorm が既に解いている
             return null;
         }
+        Parameter[] parameters = function.getParameters();
+        List<Argument> byParameter = alignedArguments(parameters, arguments);
         Map<String, String> bindings = TemplateUnification.empty();
         bindings.putAll(seed);
+        CallSite callSite = new CallSite(project, function, parameters, byParameter, bindings);
         for (int i = 0; i < parameters.length; i++) {
             Argument argument = byParameter.get(i);
+            if (argument == null) {
+                argument = defaultOf(parameters[i]);
+            }
             if (argument == null) {
                 continue;
             }
@@ -368,13 +386,18 @@ final class CallSiteGenericResolver {
             TemplateUnification.unify(
                     declared, actualTypeOf(project, argument.signature()), templates, bindings);
         }
-        fillFromBounds(doc, templates, bindings);
+        fillFromBounds(doc, function, templates, bindings);
         if (bindings.isEmpty()) {
+            return null;
+        }
+        // 条件型の主語が型変数のことがある (`(R is null ? ... : ...)`)。束縛が決まってから畳む
+        String declaredReturn = foldedReturnOf(rawReturn, callSite);
+        if (declaredReturn == null) {
             return null;
         }
         // 置換を先に行う。修飾が先だと裸の型変数 `V` が `\Probe\V` に化け、
         // 未解決の検出 (語としての `V` を探す) をすり抜けて型として漏れる
-        String substituted = PhpType.splitTopLevelUnion(declaredReturn).stream()
+        String substituted = PhpType.splitTopLevelUnion(nullableExpandedOf(declaredReturn)).stream()
                 .map(part -> qualify(TemplateSubstitution.apply(part.trim(), bindings), function))
                 .reduce((a, b) -> a + "|" + b)
                 .orElse(null);
@@ -406,20 +429,65 @@ final class CallSiteGenericResolver {
      * 名前の付いた実引数は名前で、付いていない実引数は先頭からの位置で対応させ、
      * 対応先が決められないものは捨てる。誤った位置へ束縛すると条件型が別の分岐を選ぶ。
      *
+     * <p>可変長引数 (`@param V ...$values`) には、その位置以降に書かれた実引数がすべて当たる。
+     * 宣言は要素ひとつ分の型なので、渡された実引数の型を union にまとめて 1 つの実引数として扱う。
+     *
      * @return 仮引数と同じ長さの一覧。渡されなかった位置は null
      */
     private static List<Argument> alignedArguments(Parameter[] parameters, List<Argument> arguments) {
         List<Argument> aligned = new ArrayList<>(Collections.nCopies(parameters.length, null));
+        int variadic = indexOfVariadic(parameters);
+        List<Argument> variadicArguments = new ArrayList<>();
+        boolean spread = false;
         int position = 0;
         for (Argument argument : arguments) {
+            if (argument.spread()) {
+                // `...$arr` の中身は分からない。届く先の仮引数には何も束縛しない
+                spread = true;
+                continue;
+            }
             int index = argument.name() == null
                     ? position++
                     : indexOfParameter(parameters, argument.name());
-            if (index >= 0 && index < aligned.size() && aligned.get(index) == null) {
+            if (variadic >= 0 && index >= variadic) {
+                variadicArguments.add(argument);
+            } else if (index >= 0 && index < aligned.size() && aligned.get(index) == null) {
                 aligned.set(index, argument);
             }
         }
+        if (variadic >= 0 && !spread && !variadicArguments.isEmpty()) {
+            aligned.set(variadic, unionOf(variadicArguments));
+        }
         return aligned;
+    }
+
+    private static int indexOfVariadic(Parameter[] parameters) {
+        for (int i = 0; i < parameters.length; i++) {
+            if (parameters[i].isVariadic()) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
+     * 可変長引数へ渡された実引数を 1 つにまとめる。宣言 (`V`) は要素ひとつ分の型なので、
+     * 書かれたすべての実引数の型の union がその型変数の中身になる。
+     *
+     * <p>2 つ以上あるときは、書かれたテキストを持たせない。条件型はテキストで判定するが、
+     * どの実引数のテキストを使っても他を無視することになるため。
+     */
+    private static Argument unionOf(List<Argument> arguments) {
+        if (arguments.size() == 1) {
+            return arguments.getFirst();
+        }
+        Collection<String> signatures = new LinkedHashSet<>();
+        for (Argument argument : arguments) {
+            if (!argument.signature().isBlank()) {
+                signatures.add(argument.signature());
+            }
+        }
+        return new Argument(String.join("|", signatures), "");
     }
 
     private static int indexOfParameter(Parameter[] parameters, String name) {
@@ -432,20 +500,63 @@ final class CallSiteGenericResolver {
     }
 
     /**
+     * 書かれなかった実引数を、宣言の既定値で埋める。`reduce($xs, $fn)` の `$initial` は
+     * `null` として型変数に回る。
+     *
+     * @return 既定値から作った実引数。既定値が書かれていなければ null
+     */
+    private static @Nullable Argument defaultOf(Parameter parameter) {
+        PsiElement value = parameter.getDefaultValue();
+        if (value == null) {
+            return null;
+        }
+        String signature = value instanceof PhpTypedElement typed ? signatureOf(typed) : "";
+        return new Argument(signature, ArgumentText.of(value));
+    }
+
+    /**
      * 実引数から決められなかった型変数を、`@template K of array-key` の上界で埋める。
      *
      * <p>埋めないとその型変数を含む分岐が丸ごと出せない。上界が書かれていない型変数は埋めず、
      * 従来どおり型を出さない。
+     *
+     * <p>上界がクラス名 (`@template T of Wrapper`) なら、宣言が書かれたファイルの namespace / use
+     * で完全修飾してから使う。短い名前のまま型に埋めると、存在しないクラスになる。
      */
     private static void fillFromBounds(
-            PhpDocComment doc, Collection<String> templates, Map<String, String> bindings) {
+            PhpDocComment doc,
+            Function function,
+            Collection<String> templates,
+            Map<String, String> bindings
+    ) {
         Map<String, String> declared = GenericTypeArguments.templates(doc);
         for (String template : templates) {
             String bound = declared.get(template);
             if (bound != null && !bound.isBlank()) {
-                bindings.putIfAbsent(template, bound);
+                bindings.putIfAbsent(template, qualify(bound, function));
             }
         }
+    }
+
+    /**
+     * `?V` の形を `V|null` に開く。`?` は PhpStorm の型では「型が付かなかった印」なので、
+     * そのまま出すと型が読めなくなる。
+     */
+    private static String nullableExpandedOf(String declared) {
+        List<String> members = new ArrayList<>();
+        boolean nullable = false;
+        for (String member : PhpType.splitTopLevelUnion(declared)) {
+            String trimmed = member.trim();
+            if (trimmed.startsWith("?") && trimmed.length() > 1) {
+                nullable = true;
+                trimmed = trimmed.substring(1).trim();
+            }
+            members.add(trimmed);
+        }
+        if (nullable) {
+            members.add("null");
+        }
+        return String.join("|", members);
     }
 
     /**
@@ -501,12 +612,14 @@ final class CallSiteGenericResolver {
      *
      * @param parameters 呼び出し先の仮引数。書かれなかった実引数を既定値で埋めるのに使う
      * @param arguments  仮引数の位置に並べ替えた実引数。渡されなかった位置は null
+     * @param bindings   決まった型変数。条件の主語が型変数のときに引く。解決の進行に伴って増える
      */
     private record CallSite(
             Project project,
             Function function,
             Parameter[] parameters,
-            List<Argument> arguments
+            List<Argument> arguments,
+            Map<String, String> bindings
     ) implements ConditionalReturnType.CallSite {
 
         @Override
@@ -516,30 +629,29 @@ final class CallSiteGenericResolver {
                     continue;
                 }
                 Argument argument = arguments.get(i);
+                if (argument == null) {
+                    // 書かれなかった実引数は、宣言の既定値で埋める。`init($input)` の `$mode` は
+                    // `Shape::AUTO` として条件に回る
+                    argument = defaultOf(parameters[i]);
+                }
                 return argument == null
-                        ? defaultArgumentOf(parameters[i])
+                        ? null
                         : conditionArgumentOf(argument.signature(), argument.text());
             }
             return null;
         }
 
         @Override
-        public @Nullable String qualifyDeclared(String classConstant) {
-            return ArgumentText.qualifyClassConstant(classConstant, function.getContainingFile());
+        public @Nullable ConditionalArgument templateOf(String templateName) {
+            String bound = bindings.get(templateName);
+            return bound == null || bound.isBlank()
+                    ? null
+                    : conditionArgumentOf(bound, bound);
         }
 
-        /**
-         * 書かれなかった実引数は、宣言の既定値で埋める。`init($input)` の `$mode` は
-         * `Shape::AUTO` として条件に回る。
-         */
-        private @Nullable ConditionalArgument defaultArgumentOf(Parameter parameter) {
-            PsiElement value = parameter.getDefaultValue();
-            if (value == null) {
-                return null;
-            }
-            String signature = value instanceof PhpTypedElement typed ? signatureOf(typed) : "";
-            // 既定値は宣言側のファイルに書かれているので、修飾も宣言側の namespace で行われる
-            return conditionArgumentOf(signature, ArgumentText.of(value));
+        @Override
+        public @Nullable String qualifyDeclared(String classConstant) {
+            return ArgumentText.qualifyClassConstant(classConstant, function.getContainingFile());
         }
 
         private ConditionalArgument conditionArgumentOf(String signature, String text) {
@@ -550,19 +662,25 @@ final class CallSiteGenericResolver {
     }
 
     /**
-     * 戻り値の宣言を読む。条件型なら実引数を見て分岐を選ぶ。
+     * 戻り値の宣言を、畳む前のまま読む。
      */
-    private static @Nullable String returnExpressionOf(PhpDocComment doc, CallSite callSite) {
+    private static @Nullable String returnDeclarationOf(PhpDocComment doc) {
         String raw = rawReturnOf(doc);
-        if (ConditionalReturnType.parse(raw) != null) {
-            return ConditionalReturnType.resolve(raw, callSite);
-        }
         if (raw != null) {
             // `@return V|null 説明文` の union を丸ごと読む。PhpDocType 経由 (typeNameFor) は
             // union の先頭しか返さず、`|null` が落ちる (実測: Option 型の null が消えた)
-            return firstTypeTokenOf(raw);
+            return ConditionalReturnType.parse(raw) != null ? raw : firstTypeTokenOf(raw);
         }
         return PhpDocDeclaredTypeReader.unionTypeFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
+    }
+
+    /**
+     * 条件型なら実引数と決まった型変数を見て分岐を選ぶ。条件型でなければそのまま。
+     */
+    private static @Nullable String foldedReturnOf(String declared, CallSite callSite) {
+        return ConditionalReturnType.parse(declared) == null
+                ? declared
+                : ConditionalReturnType.resolve(declared, callSite);
     }
 
     /**
@@ -645,16 +763,18 @@ final class CallSiteGenericResolver {
     /**
      * 実引数一つ分。条件型の判定には書かれたテキストが要る。
      *
-     * @param name 名前付き引数として書かれた名前。位置で渡されたなら null
+     * @param name   名前付き引数として書かれた名前。位置で渡されたなら null
+     * @param spread `...$args` として展開して渡されたか
      */
     private record Argument(
             String signature,
             String text,
             @Nullable String writtenVarType,
-            @Nullable String name
+            @Nullable String name,
+            boolean spread
     ) {
         Argument(String signature, String text) {
-            this(signature, text, null, null);
+            this(signature, text, null, null, false);
         }
 
         static Argument parse(String encoded) {
@@ -667,6 +787,7 @@ final class CallSiteGenericResolver {
             String text = "";
             String writtenVarType = null;
             String name = null;
+            boolean spread = false;
             char field = 0;
             int start = 0;
             for (int i = 0; i <= rest.length(); i++) {
@@ -678,6 +799,8 @@ final class CallSiteGenericResolver {
                     writtenVarType = value;
                 } else if (field == NAME_FIELD) {
                     name = value;
+                } else if (field == SPREAD_FIELD) {
+                    spread = true;
                 } else {
                     text = value;
                 }
@@ -687,7 +810,7 @@ final class CallSiteGenericResolver {
                 field = rest.charAt(i);
                 start = i + 1;
             }
-            return new Argument(signature, text, writtenVarType, name);
+            return new Argument(signature, text, writtenVarType, name, spread);
         }
     }
 
@@ -716,6 +839,14 @@ final class CallSiteGenericResolver {
      * そのままだと `\Op` として扱われ、存在しないクラスになる。
      */
     private static String qualify(String declared, Function function) {
+        List<String> members = TypeUnionSimplifier.intersectionMembersOf(declared);
+        if (members.size() > 1) {
+            // 交差型は成分ごとに解決する。まとめて引くと `Bag&Countable` という名前のクラスを探す
+            return members.stream()
+                    .map(member -> qualify(member, function))
+                    .reduce((left, right) -> left + "&" + right)
+                    .orElse(declared);
+        }
         int angle = declared.indexOf('<');
         String base = angle < 0 ? declared : declared.substring(0, angle);
         if (base.startsWith("\\") || base.isBlank() || function.getContainingFile() == null) {

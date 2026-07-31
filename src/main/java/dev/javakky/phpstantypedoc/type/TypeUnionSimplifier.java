@@ -299,6 +299,31 @@ public final class TypeUnionSimplifier {
         return arguments.isEmpty() ? null : new ArrayShape(base, arguments);
     }
 
+    /**
+     * 交差型 (`T&Countable`) を成分に分ける。
+     *
+     * <p>`array{a: int}&Countable` のように、型引数や配列形状の中にも `&` は現れうるため、
+     * 最上位の `&` だけを区切りにする。交差でない型は成分ひとつの一覧になる。
+     */
+    static List<String> intersectionMembersOf(String type) {
+        List<String> members = new ArrayList<>();
+        int depth = 0;
+        int start = 0;
+        for (int i = 0; i < type.length(); i++) {
+            char c = type.charAt(i);
+            if (c == '<' || c == '{' || c == '(') {
+                depth++;
+            } else if (c == '>' || c == '}' || c == ')') {
+                depth--;
+            } else if (c == '&' && depth == 0) {
+                members.add(type.substring(start, i).trim());
+                start = i + 1;
+            }
+        }
+        members.add(type.substring(start).trim());
+        return members.stream().filter(member -> !member.isEmpty()).toList();
+    }
+
     /** 最上位の `,` で型引数に分ける。入れ子の `<>` や `{}` の中の `,` は区切りにしない。 */
     private static List<String> typeArgumentsOf(String arguments) {
         List<String> parts = new ArrayList<>();

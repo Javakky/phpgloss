@@ -81,7 +81,9 @@ final class TemplateSubstitution {
             return null;
         }
         String plural = shape.element() + "[]";
-        return shape.element().contains("<") || TypeUnionSimplifier.sameType(plural, type) ? null : plural;
+        // 要素が union (`list<int|string>`) の複数形は `int|string[]` と読まれ、意味が変わる
+        boolean unreadable = shape.element().contains("<") || shape.element().contains("|");
+        return unreadable || TypeUnionSimplifier.sameType(plural, type) ? null : plural;
     }
 
     private static boolean isIdentifierPart(char c) {

@@ -5,6 +5,7 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 
@@ -14,8 +15,19 @@ import java.util.Set;
  * <p>PhpStorm はこの構文をパースはするが評価しない (YouTrack WI-66465 は "Support *parsing* of ..."
  * であり、WI-85338 / WI-77577 が未解決)。実測でも実引数を変えても結果が変わらず、
  * 両分岐の union が返る。
+ *
+ * @param subject         条件が見ている仮引数名 (`$` を除く) または型変数名
+ * @param templateSubject 主語が仮引数でなく型変数 (`R is null`) か
+ * @param negated         `is not` で書かれたか。判定の真偽をそのまま反転する
  */
-record ConditionalReturnType(String subject, String condition, String whenTrue, String whenFalse) {
+record ConditionalReturnType(
+        String subject,
+        boolean templateSubject,
+        boolean negated,
+        String condition,
+        String whenTrue,
+        String whenFalse
+) {
 
     /** 要素が並ぶだけの型。キーの型を持たない。 */
     private static final Set<String> LIST_TYPES = Set.of("list", "non-empty-list");
@@ -28,6 +40,10 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
     private static final Set<String> STRING_TYPES = Set.of(
             "string", "non-empty-string", "class-string", "numeric-string", "literal-string",
             "lowercase-string", "non-falsy-string");
+    /** null そのものを表す綴り。条件にも実引数のテキストにも現れる。 */
+    private static final Set<String> NULL_TYPES = Set.of("null");
+    /** null を取り得るかが分からない型。混ざっていたら null 判定は決めない。 */
+    private static final Set<String> UNDECIDED_TYPES = Set.of("mixed", "?", "");
 
     /**
      * 条件型を畳むのに要る、呼び出し側の情報。
@@ -38,6 +54,14 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
          * @return 呼び出しに書かれた実引数。書かれておらず既定値も無ければ null
          */
         @Nullable ConditionalArgument argumentOf(String parameterName);
+
+        /**
+         * `(R is null ? ... : ...)` のように、条件が仮引数でなく型変数を見ている場合の主語。
+         *
+         * @param templateName 型変数の名前
+         * @return 決まっている束縛。まだ決まっていなければ null
+         */
+        @Nullable ConditionalArgument templateOf(String templateName);
 
         /**
          * 条件側に書かれたクラス定数を、宣言が書かれたファイルの namespace / use で完全修飾する。
@@ -61,11 +85,19 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
         }
         String body = text.substring(1, text.length() - 1).trim();
         int is = indexOfWord(body, "is");
-        if (is < 0 || !body.startsWith("$")) {
+        if (is < 0) {
             return null;
         }
-        String subject = body.substring(1, is).trim();
-        int question = topLevelIndexOf(body, '?', is);
+        boolean templateSubject = !body.startsWith("$");
+        String subject = body.substring(templateSubject ? 0 : 1, is).trim();
+        if (templateSubject && !isIdentifier(subject)) {
+            // 型変数の主語は名前ひとつだけ。それ以外の形は条件型として読まない
+            return null;
+        }
+        int afterNot = wordEndOf(body, is + "is".length(), "not");
+        boolean negated = afterNot > 0;
+        int conditionStart = negated ? afterNot : is + "is".length();
+        int question = topLevelIndexOf(body, '?', conditionStart);
         if (question < 0) {
             return null;
         }
@@ -73,34 +105,107 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
         if (colon < 0) {
             return null;
         }
-        String condition = body.substring(is + 2, question).trim();
+        String condition = body.substring(conditionStart, question).trim();
         String whenTrue = body.substring(question + 1, colon).trim();
         String whenFalse = body.substring(colon + 1).trim();
         if (subject.isEmpty() || condition.isEmpty() || whenTrue.isEmpty() || whenFalse.isEmpty()) {
             return null;
         }
-        return new ConditionalReturnType(subject, condition, whenTrue, whenFalse);
+        return new ConditionalReturnType(
+                subject, templateSubject, negated, condition, whenTrue, whenFalse);
+    }
+
+    /**
+     * `is not` の `not`。型名の一部 (`notFalsy`) を否定と読まないよう、後ろが空白であることまで見る。
+     *
+     * @return `not` の直後の位置。書かれていなければ -1
+     */
+    private static int wordEndOf(String body, int from, String word) {
+        int at = from;
+        while (at < body.length() && Character.isWhitespace(body.charAt(at))) {
+            at++;
+        }
+        int end = at + word.length();
+        boolean written = body.startsWith(word, at)
+                && end < body.length()
+                && Character.isWhitespace(body.charAt(end));
+        return written ? end : -1;
+    }
+
+    private static boolean isIdentifier(String text) {
+        if (text.isEmpty()) {
+            return false;
+        }
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (!Character.isLetterOrDigit(c) && c != '_') {
+                return false;
+            }
+        }
+        return true;
     }
 
     /**
      * 実引数がどちらの分岐に当たるかを決める。
      *
-     * <p>enum ケース、リテラル、実引数の型の順に見る。どれでも決められないときは何も返さない。
-     * 誤った分岐を出すより黙る方がよい。
-     *
      * @return 選ばれた分岐。決められないときは null
      */
     @Nullable String select(@Nullable ConditionalArgument argument, CallSite callSite) {
+        Boolean holds = holds(argument, callSite);
+        if (holds == null) {
+            return null;
+        }
+        // `is not` は判定の真偽をそのまま反転する。決められない場合は反転しても決められない
+        return holds != negated ? whenTrue : whenFalse;
+    }
+
+    /**
+     * 条件が成り立つか。
+     *
+     * <p>null 判定、enum ケース、リテラル、実引数の型の順に見る。どれでも決められないときは
+     * 何も返さない。誤った分岐を出すより黙る方がよい。
+     *
+     * @return 成り立つなら true、成り立たないなら false、決められないときは null
+     */
+    private @Nullable Boolean holds(@Nullable ConditionalArgument argument, CallSite callSite) {
         if (argument == null || argument.text() == null || argument.text().isBlank()) {
             return null;
         }
         String actual = argument.text().trim();
         String expected = condition.trim();
-        if (isClassConstant(actual) && isClassConstant(expected)) {
-            return selectByEnumCase(actual, callSite.qualifyDeclared(expected));
+        if (NULL_TYPES.contains(unqualify(expected).toLowerCase(Locale.ROOT))) {
+            return holdsNull(argument);
         }
-        String byLiteral = selectByLiteral(actual, expected);
-        return byLiteral != null ? byLiteral : selectByActualType(expected, argument.type().get());
+        if (isClassConstant(actual) && isClassConstant(expected)) {
+            return holdsEnumCase(actual, callSite.qualifyDeclared(expected));
+        }
+        Boolean byLiteral = holdsByLiteral(actual, expected);
+        return byLiteral != null ? byLiteral : holdsByActualType(expected, argument.type().get());
+    }
+
+    /**
+     * `R is null` の判定。型キーワードの照合では決まらないので独立して見る。
+     *
+     * <p>型が null だけなら成り立ち、null を取り得ない型なら成り立たない。`int|null` のように
+     * どちらにもなり得る型では決めない。
+     */
+    private static @Nullable Boolean holdsNull(ConditionalArgument argument) {
+        if (NULL_TYPES.contains(unqualify(argument.text().trim()).toLowerCase(Locale.ROOT))) {
+            return true;
+        }
+        Set<String> members = new LinkedHashSet<>();
+        for (String member : argument.type().get().getTypes()) {
+            members.add(unqualify(member).toLowerCase(Locale.ROOT));
+        }
+        if (members.isEmpty()) {
+            return null;
+        }
+        if (members.stream().allMatch(NULL_TYPES::contains)) {
+            return true;
+        }
+        boolean undecided = members.stream()
+                .anyMatch(member -> NULL_TYPES.contains(member) || UNDECIDED_TYPES.contains(member));
+        return undecided ? null : Boolean.FALSE;
     }
 
     /**
@@ -109,27 +214,27 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
      * <p>短い名前のままでは別 namespace の同名 enum と見分けが付かないため、両方が完全修飾
      * できたときだけ判定する。
      */
-    private @Nullable String selectByEnumCase(String actual, @Nullable String expected) {
+    private static @Nullable Boolean holdsEnumCase(String actual, @Nullable String expected) {
         if (expected == null || !isQualified(actual) || !isQualified(expected)) {
             return null;
         }
         if (actual.equals(expected)) {
-            return whenTrue;
+            return true;
         }
         // 同じ enum の別ケースなら、条件は成り立たない
-        return ownerOf(actual).equals(ownerOf(expected)) ? whenFalse : null;
+        return ownerOf(actual).equals(ownerOf(expected)) ? Boolean.FALSE : null;
     }
 
     /**
      * 書かれた実引数そのもので決める。配列リテラルなら list かどうか、数値・文字列リテラルなら
      * その型キーワードに当たるかを見る。
      */
-    private @Nullable String selectByLiteral(String argumentText, String conditionType) {
+    private static @Nullable Boolean holdsByLiteral(String argumentText, String conditionType) {
         String base = baseOf(conditionType);
         if (LIST_TYPES.contains(base)) {
-            return selectByArrayLiteral(argumentText, base);
+            return holdsByArrayLiteral(argumentText, base);
         }
-        return LITERAL_TYPES.contains(base) ? selectByScalarLiteral(argumentText, base) : null;
+        return LITERAL_TYPES.contains(base) ? holdsByScalarLiteral(argumentText, base) : null;
     }
 
     /**
@@ -137,31 +242,28 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
      *
      * <p>`[1, 2]` のようにキーを書いていなければ list、`['a' => 1]` のようにキーがあれば list ではない。
      */
-    private @Nullable String selectByArrayLiteral(String argumentText, String conditionBase) {
+    private static @Nullable Boolean holdsByArrayLiteral(String argumentText, String conditionBase) {
         String literal = argumentText.trim();
         if (!literal.startsWith("[") || !literal.endsWith("]")) {
             return null;
         }
         String elements = literal.substring(1, literal.length() - 1);
         if (conditionBase.equals("non-empty-list") && elements.isBlank()) {
-            return whenFalse;
+            return false;
         }
         boolean hasKeys = topLevelIndexOf(elements, '=', 0) >= 0 && literal.contains("=>");
-        return hasKeys ? whenFalse : whenTrue;
+        return !hasKeys;
     }
 
     /**
      * 型による条件 (`$size is positive-int`) を、書かれた数値・文字列リテラルから決める。
      */
-    private @Nullable String selectByScalarLiteral(String argumentText, String conditionType) {
+    private static @Nullable Boolean holdsByScalarLiteral(String argumentText, String conditionType) {
         if (isStringLiteral(argumentText)) {
-            return conditionType.equals("string") ? whenTrue : whenFalse;
+            return conditionType.equals("string");
         }
         Long value = integerValueOf(argumentText);
-        if (value == null) {
-            return null;
-        }
-        return matchesIntegerType(conditionType, value) ? whenTrue : whenFalse;
+        return value == null ? null : matchesIntegerType(conditionType, value);
     }
 
     private static boolean matchesIntegerType(String conditionType, long value) {
@@ -181,33 +283,33 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
      * <p>`list<...>` なら list、キーが文字列の `array<...>` なら list ではない。それ以外の型は、
      * list かどうかを決めない (`array<int, ...>` は list とは限らない)。
      */
-    private @Nullable String selectByActualType(String conditionType, @Nullable PhpType actual) {
+    private static @Nullable Boolean holdsByActualType(String conditionType, @Nullable PhpType actual) {
         if (!LIST_TYPES.contains(baseOf(conditionType)) || actual == null || actual.isEmpty()) {
             return null;
         }
-        Set<String> branches = new LinkedHashSet<>();
+        Set<Boolean> decisions = new LinkedHashSet<>();
         for (String typeString : actual.getTypesWithParametrisedParts()) {
-            String branch = branchOf(typeString);
-            if (branch != null) {
-                branches.add(branch);
+            Boolean decision = isListType(typeString);
+            if (decision != null) {
+                decisions.add(decision);
             }
         }
         // union の中で食い違うなら、どちらとも決められない
-        return branches.size() == 1 ? branches.iterator().next() : null;
+        return decisions.size() == 1 ? decisions.iterator().next() : null;
     }
 
-    private @Nullable String branchOf(String typeString) {
+    private static @Nullable Boolean isListType(String typeString) {
         // 解決済みの型は `\array<...>` のように完全修飾されている
         String base = unqualify(baseOf(typeString));
         if (LIST_TYPES.contains(base)) {
-            return whenTrue;
+            return true;
         }
         if (!KEYED_TYPES.contains(base)) {
             return null;
         }
         List<String> arguments = PhpType.getParametrizedParts(typeString);
         return arguments.size() == 2 && STRING_TYPES.contains(unqualify(arguments.getFirst()))
-                ? whenFalse
+                ? Boolean.FALSE
                 : null;
     }
 
@@ -299,15 +401,49 @@ record ConditionalReturnType(String subject, String condition, String whenTrue, 
         for (int depth = 0; depth < MAX_DEPTH; depth++) {
             ConditionalReturnType conditional = parse(current);
             if (conditional == null) {
-                return looksConditional(current) ? null : current;
+                String plain = withoutRedundantParentheses(current);
+                return looksConditional(plain) ? null : plain;
             }
-            String selected = conditional.select(callSite.argumentOf(conditional.subject()), callSite);
+            String selected = conditional.select(conditional.subjectOf(callSite), callSite);
             if (selected == null) {
                 return null;
             }
             current = selected;
         }
         return null;
+    }
+
+    /**
+     * 条件の主語を呼び出し側から引く。仮引数なら実引数、型変数なら決まっている束縛。
+     */
+    private @Nullable ConditionalArgument subjectOf(CallSite callSite) {
+        return templateSubject ? callSite.templateOf(subject) : callSite.argumentOf(subject);
+    }
+
+    /**
+     * 分岐に書かれた `(?V)` の括弧を落とす。型として出すと存在しないクラス名になる。
+     */
+    private static String withoutRedundantParentheses(String type) {
+        String trimmed = type.trim();
+        if (!trimmed.startsWith("(") || !trimmed.endsWith(")")) {
+            return trimmed;
+        }
+        String body = trimmed.substring(1, trimmed.length() - 1);
+        // 先頭と末尾が対応していない形 (`(A|B)|(C)`) から剥がすと型が壊れる
+        return isBalanced(body) ? withoutRedundantParentheses(body) : trimmed;
+    }
+
+    private static boolean isBalanced(String text) {
+        int depth = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '(') {
+                depth++;
+            } else if (c == ')' && --depth < 0) {
+                return false;
+            }
+        }
+        return depth == 0;
     }
 
     /**

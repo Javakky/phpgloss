@@ -45,6 +45,11 @@ final class TemplateUnification {
             alternatives.forEach(alternative -> unify(alternative, actual, templates, bindings));
             return;
         }
+        List<String> members = TypeUnionSimplifier.intersectionMembersOf(trimmed);
+        if (members.size() > 1) {
+            unifyIntersection(members, actual, templates, bindings);
+            return;
+        }
         if (templates.contains(trimmed)) {
             bindings.putIfAbsent(trimmed, join(actual));
             return;
@@ -64,6 +69,62 @@ final class TemplateUnification {
         if (!actualElements.isEmpty()) {
             unify(element, actualElements, templates, bindings);
         }
+    }
+
+    /**
+     * `T&Countable` のような交差型を突き合わせる。
+     *
+     * <p>型変数でない成分 (`Countable`) は照合条件として使う。実引数の型が同じ成分を持っていれば
+     * 差し引き、残りを型変数に束縛する。名前だけでは実装関係を判定できないため、成分が見つから
+     * なくても束縛は止めない (`\App\Bag` は `Countable` を実装していても型名からは分からない)。
+     *
+     * <p>型変数が 2 つ以上ある交差 (`T&U`) では、どちらに何を束縛するか決められないので何もしない。
+     */
+    private static void unifyIntersection(
+            List<String> members,
+            PhpType actual,
+            Collection<String> templates,
+            Map<String, String> bindings
+    ) {
+        List<String> variables = members.stream().filter(templates::contains).toList();
+        List<String> constraints = members.stream().filter(member -> !templates.contains(member)).toList();
+        // 照合条件の中に埋まった型変数 (`Countable&iterable<V>` の V) はそのまま突き合わせる
+        constraints.forEach(constraint -> unify(constraint, actual, templates, bindings));
+        if (variables.size() != 1) {
+            return;
+        }
+        PhpType remainder = withoutConstraints(actual, constraints);
+        if (!remainder.isEmpty()) {
+            bindings.putIfAbsent(variables.getFirst(), join(remainder));
+        }
+    }
+
+    /**
+     * 実引数の型から、照合条件と一致する成分を差し引く。実引数自身が交差型
+     * (`\App\Bag&\Countable`) のとき、条件に書かれた側を残すと型変数が二重になる。
+     */
+    private static PhpType withoutConstraints(PhpType actual, Collection<String> constraints) {
+        Set<String> excluded = new LinkedHashSet<>();
+        constraints.forEach(constraint -> excluded.add(unqualified(constraint)));
+        PhpType remainder = new PhpType();
+        for (String typeString : actual.getTypesWithParametrisedParts()) {
+            String kept = TypeUnionSimplifier.intersectionMembersOf(typeString).stream()
+                    .filter(member -> !excluded.contains(unqualified(member)))
+                    .reduce((left, right) -> left + "&" + right)
+                    .orElse("");
+            if (!kept.isEmpty()) {
+                remainder.add(kept);
+            }
+        }
+        return remainder;
+    }
+
+    /**
+     * 比較のために先頭の `\` を落とす。PHPDoc には短い名前で書かれ、解決済みの型は修飾されている。
+     */
+    private static String unqualified(String type) {
+        String trimmed = type.trim();
+        return trimmed.startsWith("\\") ? trimmed.substring(1) : trimmed;
     }
 
     /**
