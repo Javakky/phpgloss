@@ -19,6 +19,13 @@ import java.util.Set;
  *
  * <p>落とすのは包摂が言える組だけにする。`int|string` のように比べられない組は、どちらが読み手の
  * 求める型か決められないため触らない。
+ *
+ * <p>もう一つ落とせない組がある。union には「同じ値の重複記述」(各プロバイダの近似が並ぶ) と
+ * 「本物の選択肢」(条件が解決できず両分岐が並ぶ) が区別なく混ざり、出所は表示側から見えない。
+ * 精密な側を残してよいのは前者だけで、後者で狭い側を残すと嘘になる。`array<int, X>` と `list<X>`
+ * のような**どちらも具体的な組**は選択肢として実在する (未解決の条件型の両分岐) ため触らない。
+ * 落とすのは `?` / `mixed` / 素の `array` / 要素型だけの複数形のような、単独では選択肢として
+ * 書かれることのない抽象側に限る。
  */
 public final class TypeUnionSimplifier {
     private static final String UNKNOWN = "?";
@@ -89,16 +96,8 @@ public final class TypeUnionSimplifier {
             return others.stream().anyMatch(other -> holdsElement(other, shape.element()));
         }
         // 空でないと分かっている方が精密
-        if ("list".equals(shape.base())
-                && others.stream().anyMatch(other -> isGenericOf("non-empty-list", other, shape.element()))) {
-            return true;
-        }
-        // 整数キーの配列より、連番と分かっている list の方が精密
-        return ANY_ARRAY.equals(shape.base()) && shape.arguments().size() == 2
-                && "int".equals(shape.arguments().getFirst())
-                && others.stream().anyMatch(other ->
-                        isGenericOf("list", other, shape.element())
-                                || isGenericOf("non-empty-list", other, shape.element()));
+        return "list".equals(shape.base())
+                && others.stream().anyMatch(other -> isGenericOf("non-empty-list", other, shape.element()));
     }
 
     /**

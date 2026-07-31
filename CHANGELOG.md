@@ -15,7 +15,7 @@
 
 - Patch the type text inside PHP's own hover instead of replacing the whole page. The rebuilt hover lost the namespace link and the full source path (reported on the real machine); the standard HTML now stays and only the type is swapped.
 - Fold `array<array-key, X>` into `X[]` — an unbounded key says nothing — so the bound-filled key from the resolver is subsumed by PhpStorm's own `array<string, int>` instead of being shown beside it.
-- Treat spellings that differ only in spacing (`array<string,int>` vs `array<string, int>`) as one type, and fold `array<int, X>` when a `list<X>` is present.
+- Treat spellings that differ only in spacing (`array<string,int>` vs `array<string, int>`) as one type. Folding `array<int, X>` into `list<X>` was considered and rejected: a union may hold genuine alternatives — an unresolved conditional keeps both branches — and there keeping only the narrower side would claim a list for a value that may not be one. Only types never written as an alternative on their own (`?`, `mixed`, bare `array`, the plural form) are folded.
 
 ## 0.44.0
 

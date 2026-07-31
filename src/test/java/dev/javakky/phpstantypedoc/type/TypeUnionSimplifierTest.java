@@ -85,4 +85,13 @@ public final class TypeUnionSimplifierTest extends TestCase {
         assertEquals("減らないのに介入している: " + types,
                 Optional.empty(), TypeUnionSimplifier.simplify(types));
     }
+
+    /**
+     * `array<int, X>` と `list<X>` は落とさない。未解決の条件型は両分岐を選択肢として union に
+     * 残すため、この組は「どちらもありえる」を意味することがある。狭い側だけ残すと嘘になる。
+     */
+    public void testKeepsAnIntKeyedArrayBesideAList() {
+        assertTrue("選択肢かもしれない組を狭めている",
+                TypeUnionSimplifier.simplify(java.util.List.of("list<\\int>", "array<\\int, \\int>")).isEmpty());
+    }
 }
