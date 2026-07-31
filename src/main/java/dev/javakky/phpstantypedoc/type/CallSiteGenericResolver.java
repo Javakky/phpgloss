@@ -1,8 +1,10 @@
 package dev.javakky.phpstantypedoc.type;
 
 import com.intellij.openapi.project.Project;
+import com.intellij.psi.PsiComment;
 import com.intellij.psi.PsiElement;
 import com.intellij.psi.PsiFile;
+import com.intellij.psi.PsiWhiteSpace;
 import com.jetbrains.php.PhpIndex;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
 import com.jetbrains.php.lang.psi.elements.Function;
@@ -23,7 +25,9 @@ import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 
@@ -45,6 +49,10 @@ final class CallSiteGenericResolver {
     private static final char SUBFIELD = 'ᨦ';
     /** 「書かれたテキスト」と「@var に書かれた型」を区切る文字。精密化はテキストにしか残らない。 */
     private static final char VAR_FIELD = 'ᨬ';
+    /** 名前付き引数 (`mode: Shape::AS_LIST`) の名前を区切る文字。 */
+    private static final char NAME_FIELD = 'ᨭ';
+    /** {@link #VAR_FIELD} と {@link #NAME_FIELD}。どちらも書かれたときだけ現れる。 */
+    private static final String OPTIONAL_FIELDS = "" + VAR_FIELD + NAME_FIELD;
     /** メソッド呼び出しであることを表す印。続けてレシーバのシグネチャを持つ。 */
     private static final char METHOD = 'ᨧ';
     /**
@@ -57,6 +65,12 @@ final class CallSiteGenericResolver {
     private static final char OUTER_UNION_ESCAPE = 'ᨪ';
     private static final char FIELD_ESCAPE = 'ᨨ';
     private static final char SUBFIELD_ESCAPE = 'ᨩ';
+
+    /** 条件型が書かれるのは phpstan / psalm の拡張タグだけ。 */
+    private static final List<String> EXTENDED_PARAM_TAGS = List.of("@phpstan-param", "@psalm-param");
+    /** callable の形は素の `@param` にも書かれる。 */
+    private static final List<String> ALL_PARAM_TAGS =
+            List.of("@phpstan-param", "@psalm-param", "@param");
 
     private CallSiteGenericResolver() {
     }
@@ -89,8 +103,39 @@ final class CallSiteGenericResolver {
                 // テキストを運ぶ。読み取りはローカル PSI だけで済むので索引中でも行える
                 encoded.append(VAR_FIELD).append(escapeSignature(written));
             }
+            String name = argumentNameOf(argument);
+            if (name != null) {
+                encoded.append(NAME_FIELD).append(escapeSignature(name));
+            }
         }
         return encoded.toString();
+    }
+
+    /**
+     * 名前付き引数の名前を読む。
+     *
+     * <p>{@code FunctionReference#getParameters()} は名前を落として値だけを位置順に返す (実測)。
+     * 名前は引数リストの中に `名前` `:` の並びで残っているので、値の手前を遡って読む。
+     *
+     * @return `mode: Shape::AS_LIST` の `mode`。名前付きでなければ null
+     */
+    private static @Nullable String argumentNameOf(PsiElement argument) {
+        PsiElement colon = previousMeaningful(argument);
+        if (colon == null || !":".equals(colon.getText())) {
+            return null;
+        }
+        PsiElement name = previousMeaningful(colon);
+        return name == null || name.getText().isBlank() ? null : name.getText();
+    }
+
+    private static @Nullable PsiElement previousMeaningful(PsiElement element) {
+        for (PsiElement sibling = element.getPrevSibling(); sibling != null;
+                sibling = sibling.getPrevSibling()) {
+            if (!(sibling instanceof PsiWhiteSpace) && !(sibling instanceof PsiComment)) {
+                return sibling;
+            }
+        }
+        return null;
     }
 
     /**
@@ -144,7 +189,10 @@ final class CallSiteGenericResolver {
         for (PsiElement argument : reference.getParameters()) {
             String signature = argument instanceof PhpTypedElement typed ? signatureOf(typed) : "";
             arguments.add(new Argument(
-                    signature, ArgumentText.of(argument), ArgumentText.writtenVarTypeOf(argument)));
+                    signature,
+                    ArgumentText.of(argument),
+                    ArgumentText.writtenVarTypeOf(argument),
+                    argumentNameOf(argument)));
         }
         return arguments;
     }
@@ -207,27 +255,11 @@ final class CallSiteGenericResolver {
             return null;
         }
         Project project = reference.getProject();
-        PhpType receiverType = receiver.getType().global(project);
-        List<Argument> arguments = argumentsOf(reference);
-        PhpType result = new PhpType();
-        for (String typeString : receiverType.getTypesWithParametrisedParts()) {
-            int angle = typeString.indexOf('<');
-            if (angle < 0) {
-                continue;
-            }
-            for (PhpClass phpClass : PhpIndex.getInstance(project).getClassesByFQN(typeString.substring(0, angle))) {
-                Method method = phpClass.findMethodByName(reference.getName());
-                Map<String, String> seed = GenericTypeArguments.of(phpClass, typeString);
-                if (method == null || seed.isEmpty()) {
-                    continue;
-                }
-                PhpType resolved = returnTypeOf(project, method, arguments, seed);
-                if (resolved != null) {
-                    result.add(resolved);
-                }
-            }
-        }
-        return result.isEmpty() ? null : result;
+        return methodResultOf(
+                project,
+                receiver.getType().global(project),
+                reference.getName(),
+                argumentsOf(reference));
     }
 
     /**
@@ -241,9 +273,24 @@ final class CallSiteGenericResolver {
         if (fields.size() < 2) {
             return null;
         }
-        String methodName = fields.get(1);
         List<Argument> arguments = fields.subList(2, fields.size()).stream().map(Argument::parse).toList();
-        PhpType receiverType = actualTypeOf(project, receiverSignature);
+        return methodResultOf(
+                project, actualTypeOf(project, receiverSignature), fields.get(1), arguments);
+    }
+
+    /**
+     * レシーバの型からメソッドの戻り値を組み立てる。
+     *
+     * <p>型引数を持たないレシーバも通す。`Foo::bar(...)` の静的呼び出しはレシーバが素のクラス名で、
+     * 型引数を持ちようがない (実測: `classReference` は `ClassReference` で型は `\Probe\Holder`)。
+     * 型変数はメソッド自身の `@template` から来て、実引数だけで決まる。
+     */
+    private static @Nullable PhpType methodResultOf(
+            Project project,
+            PhpType receiverType,
+            String methodName,
+            List<Argument> arguments
+    ) {
         PhpType result = new PhpType();
         for (String typeString : receiverType.getTypesWithParametrisedParts()) {
             int angle = typeString.indexOf('<');
@@ -269,15 +316,21 @@ final class CallSiteGenericResolver {
             List<Argument> arguments,
             Map<String, String> seed
     ) {
-        Collection<String> templates =
-                new java.util.LinkedHashSet<>(PhpGenericsBaseExtendedWithGenericTypeProvider.getTemplates(function));
-        templates.addAll(seed.keySet());
         PhpDocComment doc = function.getDocComment();
-        if (templates.isEmpty() || doc == null) {
+        if (doc == null) {
+            return null;
+        }
+        Collection<String> templates =
+                new LinkedHashSet<>(PhpGenericsBaseExtendedWithGenericTypeProvider.getTemplates(function));
+        // 変性付きの宣言 (`@template-covariant`) は PhpStorm 側の一覧に載らない
+        templates.addAll(GenericTypeArguments.templates(doc).keySet());
+        templates.addAll(seed.keySet());
+        if (templates.isEmpty()) {
             return null;
         }
         Parameter[] parameters = function.getParameters();
-        CallSite callSite = new CallSite(project, function, parameters, arguments);
+        List<Argument> byParameter = alignedArguments(parameters, arguments);
+        CallSite callSite = new CallSite(project, function, parameters, byParameter);
         String declaredReturn = returnExpressionOf(doc, callSite);
         if (declaredReturn == null || !mentionsTemplate(declaredReturn, templates)) {
             // 型変数を含まない戻り値は PhpStorm が既に解いている
@@ -285,22 +338,35 @@ final class CallSiteGenericResolver {
         }
         Map<String, String> bindings = TemplateUnification.empty();
         bindings.putAll(seed);
-        for (int i = 0; i < parameters.length && i < arguments.size(); i++) {
-            String declared = declaredParamOf(doc, callSite, parameters[i].getName());
-            String signature = arguments.get(i).signature();
+        for (int i = 0; i < parameters.length; i++) {
+            Argument argument = byParameter.get(i);
+            if (argument == null) {
+                continue;
+            }
+            String parameterName = parameters[i].getName();
+            // `callable(V, K): E` の戻り位置は union として読むと `:` の手前で切れる (実測)。
+            // callable の形は書かれたまま読んで、渡されたクロージャと突き合わせる
+            CallableUnification.unify(
+                    project,
+                    rawParamOf(doc, parameterName, ALL_PARAM_TAGS),
+                    argument.signature(),
+                    templates,
+                    bindings);
+            String declared = declaredParamOf(doc, callSite, parameterName);
             if (declared == null) {
                 continue;
             }
-            String written = arguments.get(i).writtenVarType();
+            String written = argument.writtenVarType();
             if (written != null) {
                 // `@var list<positive-int>` の精密化は PhpStorm の型には残らない (int に潰れる)。
                 // 書かれた型どうしを構造で照合して先に束縛する
                 TemplateUnification.unifyText(declared, written, templates, bindings);
             }
-            if (signature.isBlank()) {
+            if (argument.signature().isBlank()) {
                 continue;
             }
-            TemplateUnification.unify(declared, actualTypeOf(project, signature), templates, bindings);
+            TemplateUnification.unify(
+                    declared, actualTypeOf(project, argument.signature()), templates, bindings);
         }
         fillFromBounds(doc, templates, bindings);
         if (bindings.isEmpty()) {
@@ -333,6 +399,39 @@ final class CallSiteGenericResolver {
     }
 
     /**
+     * 実引数を仮引数の位置へ並べ替える。
+     *
+     * <p>名前付き引数は書かれた位置と対応しない。`init($input, mode: Shape::AS_LIST)` の
+     * `mode:` を位置で読むと第 2 仮引数へ当ててしまい、たまたま当たっているだけになる。
+     * 名前の付いた実引数は名前で、付いていない実引数は先頭からの位置で対応させ、
+     * 対応先が決められないものは捨てる。誤った位置へ束縛すると条件型が別の分岐を選ぶ。
+     *
+     * @return 仮引数と同じ長さの一覧。渡されなかった位置は null
+     */
+    private static List<Argument> alignedArguments(Parameter[] parameters, List<Argument> arguments) {
+        List<Argument> aligned = new ArrayList<>(Collections.nCopies(parameters.length, null));
+        int position = 0;
+        for (Argument argument : arguments) {
+            int index = argument.name() == null
+                    ? position++
+                    : indexOfParameter(parameters, argument.name());
+            if (index >= 0 && index < aligned.size() && aligned.get(index) == null) {
+                aligned.set(index, argument);
+            }
+        }
+        return aligned;
+    }
+
+    private static int indexOfParameter(Parameter[] parameters, String name) {
+        for (int i = 0; i < parameters.length; i++) {
+            if (name.equals(parameters[i].getName())) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /**
      * 実引数から決められなかった型変数を、`@template K of array-key` の上界で埋める。
      *
      * <p>埋めないとその型変数を含む分岐が丸ごと出せない。上界が書かれていない型変数は埋めず、
@@ -361,7 +460,7 @@ final class CallSiteGenericResolver {
             CallSite callSite,
             String parameterName
     ) {
-        String raw = rawParamOf(doc, parameterName);
+        String raw = rawParamOf(doc, parameterName, EXTENDED_PARAM_TAGS);
         if (raw != null && ConditionalReturnType.parse(raw) != null) {
             String folded = ConditionalReturnType.resolve(raw, callSite);
             if (folded != null) {
@@ -379,8 +478,8 @@ final class CallSiteGenericResolver {
     /**
      * `@phpstan-param` に書かれた本文をそのまま読む。条件型は {@code PhpDocType} にならない。
      */
-    private static @Nullable String rawParamOf(PhpDocComment doc, String parameterName) {
-        for (String tag : List.of("@phpstan-param", "@psalm-param")) {
+    private static @Nullable String rawParamOf(PhpDocComment doc, String parameterName, List<String> tags) {
+        for (String tag : tags) {
             for (var element : doc.getTagElementsByName(tag)) {
                 String text = element.getText();
                 if (!text.contains("$" + parameterName)) {
@@ -401,6 +500,7 @@ final class CallSiteGenericResolver {
      * 条件型を畳むための呼び出し側の情報。
      *
      * @param parameters 呼び出し先の仮引数。書かれなかった実引数を既定値で埋めるのに使う
+     * @param arguments  仮引数の位置に並べ替えた実引数。渡されなかった位置は null
      */
     private record CallSite(
             Project project,
@@ -415,9 +515,10 @@ final class CallSiteGenericResolver {
                 if (!parameterName.equals(parameters[i].getName())) {
                     continue;
                 }
-                return i < arguments.size()
-                        ? conditionArgumentOf(arguments.get(i).signature(), arguments.get(i).text())
-                        : defaultArgumentOf(parameters[i]);
+                Argument argument = arguments.get(i);
+                return argument == null
+                        ? defaultArgumentOf(parameters[i])
+                        : conditionArgumentOf(argument.signature(), argument.text());
             }
             return null;
         }
@@ -543,10 +644,17 @@ final class CallSiteGenericResolver {
 
     /**
      * 実引数一つ分。条件型の判定には書かれたテキストが要る。
+     *
+     * @param name 名前付き引数として書かれた名前。位置で渡されたなら null
      */
-    private record Argument(String signature, String text, @Nullable String writtenVarType) {
+    private record Argument(
+            String signature,
+            String text,
+            @Nullable String writtenVarType,
+            @Nullable String name
+    ) {
         Argument(String signature, String text) {
-            this(signature, text, null);
+            this(signature, text, null, null);
         }
 
         static Argument parse(String encoded) {
@@ -554,12 +662,32 @@ final class CallSiteGenericResolver {
             if (separator < 0) {
                 return new Argument(unescapeSignature(encoded), "");
             }
+            String signature = unescapeSignature(encoded.substring(0, separator));
             String rest = encoded.substring(separator + 1);
-            int varAt = rest.indexOf(VAR_FIELD);
-            return new Argument(
-                    unescapeSignature(encoded.substring(0, separator)),
-                    unescapeSignature(varAt < 0 ? rest : rest.substring(0, varAt)),
-                    varAt < 0 ? null : unescapeSignature(rest.substring(varAt + 1)));
+            String text = "";
+            String writtenVarType = null;
+            String name = null;
+            char field = 0;
+            int start = 0;
+            for (int i = 0; i <= rest.length(); i++) {
+                if (i < rest.length() && OPTIONAL_FIELDS.indexOf(rest.charAt(i)) < 0) {
+                    continue;
+                }
+                String value = unescapeSignature(rest.substring(start, i));
+                if (field == VAR_FIELD) {
+                    writtenVarType = value;
+                } else if (field == NAME_FIELD) {
+                    name = value;
+                } else {
+                    text = value;
+                }
+                if (i == rest.length()) {
+                    break;
+                }
+                field = rest.charAt(i);
+                start = i + 1;
+            }
+            return new Argument(signature, text, writtenVarType, name);
         }
     }
 
@@ -610,7 +738,7 @@ final class CallSiteGenericResolver {
      *
      * <p>{@code PhpType#add} は文字列を union として分解しないので、先に自分で分ける。
      */
-    private static PhpType actualTypeOf(Project project, String signature) {
+    static PhpType actualTypeOf(Project project, String signature) {
         List<String> parts = PhpType.splitTopLevelUnion(signature);
         PhpType raw = new PhpType();
         parts.forEach(raw::add);

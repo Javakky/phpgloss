@@ -1,5 +1,6 @@
 package dev.javakky.phpstantypedoc.type;
 
+import com.intellij.psi.util.PsiTreeUtil;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.tags.PhpDocTag;
 import com.jetbrains.php.lang.psi.elements.PhpClass;
@@ -7,8 +8,10 @@ import com.jetbrains.php.lang.psi.resolve.types.PhpType;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 /**
  * ジェネリクスの型変数と実引数の対応を作る。
@@ -18,7 +21,11 @@ import java.util.Map;
  * それをメンバの戻り値へ伝播させないため、その差し替えを自前で行う。
  */
 final class GenericTypeArguments {
-    private static final String TEMPLATE_TAG = "@template";
+    /**
+     * 型変数を宣言するタグ。変性 (`-covariant` / `-contravariant`) が付いても宣言の読み方は同じで、
+     * 変性そのものは型引数の対応付けに影響しない。
+     */
+    private static final Set<String> TEMPLATE_TAGS = templateTags();
 
     private GenericTypeArguments() {
     }
@@ -35,7 +42,8 @@ final class GenericTypeArguments {
         List<String> names = templateNames(phpClass);
         Map<String, String> bindings = new LinkedHashMap<>();
         for (int i = 0; i < names.size() && i < arguments.size(); i++) {
-            String argument = arguments.get(i);
+            // `Box<int, \App\User>` の 2 つ目は先頭の空白ごと切り出される。型として使う前に落とす
+            String argument = arguments.get(i).trim();
             // 未解決のまま残った型変数 (`#ᢐV.`) を実引数として扱わない。
             // 扱うと `non-empty-list<V>` のような、型変数が残った型を出してしまう
             if (argument.startsWith("#") || argument.isBlank() || names.contains(argument)) {
@@ -66,18 +74,43 @@ final class GenericTypeArguments {
             return Map.of();
         }
         Map<String, String> templates = new LinkedHashMap<>();
-        for (String tag : new String[]{TEMPLATE_TAG, "@phpstan-" + TEMPLATE_TAG.substring(1),
-                "@psalm-" + TEMPLATE_TAG.substring(1)}) {
-            for (PhpDocTag docTag : doc.getTagElementsByName(tag)) {
-                String declaration = docTag.getText().substring(
-                        docTag.getText().indexOf(tag) + tag.length()).trim();
-                String name = firstIdentifierOf(declaration);
-                if (name != null) {
-                    templates.putIfAbsent(name, boundOf(declaration.substring(name.length())));
-                }
+        // 宣言順が型引数の対応順になるため、タグ名ごとにまとめて読まず書かれた順に辿る
+        for (PhpDocTag docTag : PsiTreeUtil.findChildrenOfType(doc, PhpDocTag.class)) {
+            String text = docTag.getText().trim();
+            String tag = tagNameOf(text);
+            if (!TEMPLATE_TAGS.contains(tag)) {
+                continue;
+            }
+            String declaration = text.substring(tag.length()).trim();
+            String name = firstIdentifierOf(declaration);
+            if (name != null) {
+                templates.putIfAbsent(name, boundOf(declaration.substring(name.length())));
             }
         }
         return templates;
+    }
+
+    /**
+     * `@phpstan-template-covariant K of ...` の `@phpstan-template-covariant`。
+     * 名前に `-` を含むタグがあるので、識別子として `-` まで読む。
+     */
+    private static String tagNameOf(String text) {
+        int end = 1;
+        while (end < text.length()
+                && (Character.isLetterOrDigit(text.charAt(end)) || text.charAt(end) == '-')) {
+            end++;
+        }
+        return text.substring(0, end);
+    }
+
+    private static Set<String> templateTags() {
+        Set<String> tags = new LinkedHashSet<>();
+        for (String prefix : new String[]{"@", "@phpstan-", "@psalm-"}) {
+            for (String variance : new String[]{"", "-covariant", "-contravariant"}) {
+                tags.add(prefix + "template" + variance);
+            }
+        }
+        return tags;
     }
 
     /**

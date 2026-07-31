@@ -11,6 +11,15 @@
 
 
 
+## 0.52.0
+
+- Bind the element type of a `map`-style call from the closure passed to it. `@param callable(V, K): E $callback` never bound `E`, so every conditional return mentioning it stayed unresolved. PhpStorm already carries the closure's shape in the argument type — `fn (int $v): string` measures as `\Closure<#ᤓvᤓ\int,\string>` — and puts only the *written* declaration in each parameter slot, the written-or-inferred type in the last. That is exactly the wanted rule: parameters bind from what was written, the return falls back to what PhpStorm inferred. A callable carrying no shape (`strlen(...)`, `'strlen'`) binds nothing rather than guessing.
+- Read `callable(V, K): E` whole from the raw tag. The union reader stops at the `:`, so the return position was never seen at all.
+- Match named arguments by name. `getParameters()` drops the names and hands back the values in written order, so `init(mode: ..., input: ...)` bound the mode to `$input` and the array to `$mode` and the conditional chose the other branch. Positional arguments still fill from the front, and an argument whose name matches no parameter is dropped instead of guessed at.
+- Resolve a static call. `Foo::bar()` has a plain class reference as its receiver, which can carry no type arguments, and the method path gave up on every receiver without them. The type variables come from the method's own `@template` and bind from the arguments alone.
+- Read `@template-covariant` and `@template-contravariant`, with the `@phpstan-` and `@psalm-` prefixes too. A bound written after `of` on such a declaration was lost, leaving a type variable that only the bound could fill unresolved. Tags are now read in written order, which is the order the type arguments are matched in.
+- Trim a type argument before using it. `Box<int, \App\User>` yields the second one with its leading space, which turned the substituted type into a class that does not exist.
+
 ## 0.51.0
 
 - Never trade precision away when fixing the hover. The resolver's own binding travels through the indexed signature, which flattens PhpStorm's constant tracking (`int<20,20>` became `int`), and fixing the hover to it hid the finer type PhpStorm already knew. With the branch decided every union member describes the same value, so a member with the same structure and a strictly finer element now replaces the resolver's coarser one. Structure must match, keeping genuine alternatives (`list<X>` vs `array<int, X>`) unmixed.
