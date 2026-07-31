@@ -107,7 +107,7 @@ public final class PhpStanInvokeTypeProvider implements PhpTypeProvider4 {
      */
     private @Nullable PhpType resolveHere(PhpTypedElement callee, Project project) {
         PhpType calleeType = callee instanceof FunctionReference calleeCall && calleeCall.getName() != null
-                ? CallSiteGenericResolver.resolveCallHere(calleeCall)
+                ? ResolvedCallType.of(calleeCall).orElse(null)
                 : callee.getType().global(project);
         if (calleeType == null || calleeType.isEmpty()) {
             return null;

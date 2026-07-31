@@ -11,6 +11,11 @@
 
 
 
+## 0.46.0
+
+- Fix the hover to the resolved type when this plugin's own resolver has decided the branch of the call the variable was assigned from. A decided branch is a refinement, not another approximation, so the coarser members of the union (`array<int, int>` beside a decided `list<int>`) are known to co-describe the same value and can be dropped. An undecided call keeps the conservative folding, where such a pair may be genuine alternatives.
+- Cache the in-place resolution per call expression. The same call is resolved by the type-provider pass, the `__invoke` path and now the hover; the result is computed once and rebuilt on PSI change.
+
 ## 0.45.0
 
 - Patch the type text inside PHP's own hover instead of replacing the whole page. The rebuilt hover lost the namespace link and the full source path (reported on the real machine); the standard HTML now stays and only the type is swapped.

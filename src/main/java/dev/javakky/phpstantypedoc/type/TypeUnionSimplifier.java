@@ -59,6 +59,20 @@ public final class TypeUnionSimplifier {
     }
 
     /**
+     * 表示用の綴りに揃えて重複を除く。包摂は行わない (確定した型をそのまま見せる用途)。
+     */
+    public static List<String> normalize(Collection<String> types) {
+        Set<String> keys = new LinkedHashSet<>();
+        for (String type : types) {
+            String key = keyOf(type);
+            if (!key.isEmpty() && !UNKNOWN.equals(key)) {
+                keys.add(key);
+            }
+        }
+        return List.copyOf(keys);
+    }
+
+    /**
      * 表示の上で同じ型か。`array<\App\User>` と `\App\User[]` は同じ意味の別表記になる。
      */
     static boolean sameType(String left, String right) {

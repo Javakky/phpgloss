@@ -113,4 +113,72 @@ public final class VariableTypeUnionHoverTest extends BasePlatformTestCase {
                 .computeDocumentation()
                 .toString();
     }
+
+    /**
+     * この plugin の解決器が分岐を確定させた変数は、粗い近似 (`array<int, int>` 等) を並べず
+     * 確定した型に固める。確定した型は選択肢を潰した精密化なので、隣の成分は同じ値の近似でしかない。
+     */
+    public void testFixesTheTypeWhenTheResolverDeterminedTheBranch() {
+        String source = """
+                <?php
+                namespace Probe;
+
+                enum Shape { case AS_LIST; case AS_KEYED; case AUTO;
+                    public static function resolveShape(Shape $m, array $i): Shape { return $m; } }
+
+                /**
+                 * @template K of array-key
+                 * @template V
+                 * @param list<V>|array<K, V> $input
+                 * @phpstan-return ($mode is Shape::AS_LIST ? list<V> : array<K, V>)
+                 */
+                function shaped(array $input, Shape $mode = Shape::AUTO): array { return $input; }
+
+                function probe(): void
+                {
+                    $fixed = shaped([1, 2, 3], Shape::AS_LIST);
+                }
+                """;
+        var file = myFixture.configureByText(com.jetbrains.php.lang.PhpFileType.INSTANCE, source);
+        int offset = source.indexOf("$fixed") + 2;
+
+        var target = SimplifiedVariableTypeTarget.at(file, offset).orElseThrow();
+        String html = String.valueOf(target.computeDocumentation());
+
+        assertTrue("確定した list が出ていない: " + html, html.contains("list"));
+        assertFalse("確定したのに粗い近似が並んでいる: " + html, html.contains("array<int"));
+    }
+
+    /**
+     * 解決器が黙る呼び出し (分岐を確定できない) では固めない。union は選択肢を含みうる。
+     */
+    public void testDoesNotFixTheTypeWhenTheBranchIsUndecided() {
+        String source = """
+                <?php
+                namespace Probe;
+
+                enum Shape { case AS_LIST; case AS_KEYED; case AUTO;
+                    public static function resolveShape(Shape $m, array $i): Shape { return $m; } }
+
+                /**
+                 * @template K of array-key
+                 * @template V
+                 * @param list<V>|array<K, V> $input
+                 * @phpstan-return ($mode is Shape::AS_LIST ? list<V> : array<K, V>)
+                 */
+                function shaped(array $input, Shape $mode = Shape::AUTO): array { return $input; }
+
+                function probe(Shape $unknown, array $given): void
+                {
+                    $open = shaped($given, $unknown);
+                }
+                """;
+        var file = myFixture.configureByText(com.jetbrains.php.lang.PhpFileType.INSTANCE, source);
+        int offset = source.indexOf("$open") + 2;
+
+        var target = SimplifiedVariableTypeTarget.at(file, offset);
+
+        target.ifPresent(t -> assertFalse("確定していないのに list に固めている: " + t.computeDocumentation(),
+                String.valueOf(t.computeDocumentation()).contains("list<")));
+    }
 }

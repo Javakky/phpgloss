@@ -10,9 +10,13 @@ import com.intellij.psi.PsiFile;
 import com.intellij.lang.LanguageDocumentation;
 import com.intellij.lang.documentation.DocumentationProvider;
 import com.intellij.psi.util.PsiTreeUtil;
+import com.jetbrains.php.lang.psi.elements.AssignmentExpression;
+import com.jetbrains.php.lang.psi.elements.Function;
+import com.jetbrains.php.lang.psi.elements.FunctionReference;
 import com.jetbrains.php.lang.psi.elements.Parameter;
 import com.jetbrains.php.lang.psi.elements.PhpNamedElement;
 import com.jetbrains.php.lang.psi.elements.Variable;
+import dev.javakky.phpstantypedoc.type.ResolvedCallType;
 import dev.javakky.phpstantypedoc.type.TypeUnionSimplifier;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -43,8 +47,51 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
         if (!(variable instanceof Variable) && !(variable instanceof Parameter)) {
             return Optional.empty();
         }
+        // この plugin の解決器が代入右辺の分岐を確定させているなら、その型が値の精密化で、
+        // union の他の成分は同じ値の粗い近似 (選択肢ではない) と分かる。表示はそれに固める
+        List<String> resolved = resolvedFromAssignment(variable);
+        if (!resolved.isEmpty()) {
+            return Optional.of(new SimplifiedVariableTypeTarget(variable, resolved));
+        }
         return TypeUnionSimplifier.simplify(variable.getType().global(file.getProject()).getTypesWithParametrisedParts())
                 .map(simplified -> new SimplifiedVariableTypeTarget(variable, simplified));
+    }
+
+    /**
+     * 変数が関数内で一度だけ、呼び出しの結果を代入されている場合に、その呼び出しを
+     * この plugin の解決器で解いた型を返す。複数回代入される変数はどの値か決められないので使わない。
+     */
+    private static List<String> resolvedFromAssignment(PhpNamedElement variable) {
+        if (!(variable instanceof Variable) && !(variable instanceof Parameter)) {
+            return List.of();
+        }
+        Function enclosing = PsiTreeUtil.getParentOfType(variable, Function.class, false);
+        if (enclosing == null || variable.getName() == null) {
+            return List.of();
+        }
+        AssignmentExpression single = null;
+        for (AssignmentExpression assignment
+                : PsiTreeUtil.findChildrenOfType(enclosing, AssignmentExpression.class)) {
+            if (assignment.getVariable() instanceof Variable left
+                    && variable.getName().equals(left.getName())) {
+                if (single != null) {
+                    return List.of();
+                }
+                single = assignment;
+            }
+        }
+        if (single == null || !(single.getValue() instanceof FunctionReference call)) {
+            return List.of();
+        }
+        return ResolvedCallType.of(call)
+                .map(type -> {
+                    var parts = type.getTypesWithParametrisedParts();
+                    // 自分が出した型どうしは重複記述と分かっている (複数形は要素アクセス用に
+                    // 自分で足したもの) ので、ここは包摂まで整理してよい
+                    return TypeUnionSimplifier.simplify(parts)
+                            .orElseGet(() -> TypeUnionSimplifier.normalize(parts));
+                })
+                .orElse(List.of());
     }
 
     @Override

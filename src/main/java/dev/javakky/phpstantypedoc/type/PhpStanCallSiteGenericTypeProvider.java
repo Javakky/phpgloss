@@ -38,7 +38,7 @@ public final class PhpStanCallSiteGenericTypeProvider implements PhpTypeProvider
             // 型引数が落ちるため (実測)、索引外でその場で解く。索引中は諦めて null を返す
             return DumbService.isDumb(element.getProject())
                     ? null
-                    : CallSiteGenericResolver.resolveMethodHere(method);
+                    : ResolvedCallType.of(method).orElse(null);
         }
         return new PhpType().add("#" + KEY + CallSiteGenericResolver.encode(reference));
     }
