@@ -14,6 +14,13 @@ import java.util.List;
  * 消せないので、表示の側で整理している。
  */
 public final class VariableTypeUnionHoverTest extends BasePlatformTestCase {
+    /** リンクや色のタグを剥がした、読み手に見える文字列。 */
+    private String visibleText(Object documentation) {
+        return String.valueOf(documentation)
+                .replaceAll("<[^>]*>", "")
+                .replace("&lt;", "<").replace("&gt;", ">").replace("&amp;", "&");
+    }
+
     private static final String GENERIC = """
             <?php
             namespace Probe;
@@ -69,7 +76,7 @@ public final class VariableTypeUnionHoverTest extends BasePlatformTestCase {
         String html = documentationAt(file, GENERIC.indexOf("$result") + 2);
 
         assertTrue("変数名が出ていない: " + html, html.contains("$result"));
-        assertTrue("解けた型が出ていない: " + html, html.contains("list&lt;int&gt;"));
+        assertTrue("解けた型が出ていない: " + html, html.contains("list<int>"));
         assertFalse("抽象型が残っている: " + html, html.contains("array"));
         assertFalse("複数形が残っている: " + html, html.contains("int[]"));
     }
@@ -108,10 +115,9 @@ public final class VariableTypeUnionHoverTest extends BasePlatformTestCase {
     }
 
     private String documentationAt(PsiFile file, int offset) {
-        return new PhpStanTypeDocumentationTargetProvider()
+        return visibleText(new PhpStanTypeDocumentationTargetProvider()
                 .documentationTargets(file, offset).getFirst()
-                .computeDocumentation()
-                .toString();
+                .computeDocumentation());
     }
 
     /**
@@ -143,7 +149,7 @@ public final class VariableTypeUnionHoverTest extends BasePlatformTestCase {
         int offset = source.indexOf("$fixed") + 2;
 
         var target = SimplifiedVariableTypeTarget.at(file, offset).orElseThrow();
-        String html = String.valueOf(target.computeDocumentation());
+        String html = visibleText(target.computeDocumentation());
 
         assertTrue("確定した list が出ていない: " + html, html.contains("list"));
         assertFalse("確定したのに粗い近似が並んでいる: " + html, html.contains("array<int"));
@@ -179,6 +185,6 @@ public final class VariableTypeUnionHoverTest extends BasePlatformTestCase {
         var target = SimplifiedVariableTypeTarget.at(file, offset);
 
         target.ifPresent(t -> assertFalse("確定していないのに list に固めている: " + t.computeDocumentation(),
-                String.valueOf(t.computeDocumentation()).contains("list<")));
+                visibleText(t.computeDocumentation()).contains("list<")));
     }
 }

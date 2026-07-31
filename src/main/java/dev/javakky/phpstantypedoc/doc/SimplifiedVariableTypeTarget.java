@@ -127,7 +127,7 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
             return DocumentationResult.documentation(patched);
         }
         return DocumentationResult.documentation(renderer.renderVariableType(
-                variable.getName(), typeText(), variable.getContainingFile().getName()));
+                variable.getName(), linkedTypeText(), variable.getContainingFile().getName()));
     }
 
     private @Nullable String standardHtml() {
@@ -137,25 +137,55 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
     }
 
     /**
-     * `$name: <型>` の型の部分を差し替える。標準の HTML は型の各要素をリンク付きで並べるため、
-     * 名前の直後から定義ブロックの閉じまでを、整理後の型 (クラス名はリンク化) に置き換える。
+     * `$name: <型>` の型の部分を差し替える。
+     *
+     * <p>標準の HTML では変数名が色付きの {@code <span>} に包まれるため、`$name:` の文字列一致では
+     * 見つからない (実機でフォールバックに落ち、リンクも色も失われた)。名前の出現位置から
+     * タグを飛ばしながら本文の `:` を探し、そこから定義ブロックの閉じまでを差し替える。
      */
     private @Nullable String replaceTypeText(String html) {
-        String marker = name() + ":";
-        int at = html.indexOf(marker);
+        int at = html.indexOf(name());
         if (at < 0) {
+            at = html.indexOf(variable.getName());
+            if (at < 0) {
+                return null;
+            }
+        }
+        int colon = textIndexOf(html, ':', at);
+        if (colon < 0) {
             return null;
         }
-        int end = html.indexOf("</pre>", at);
+        int end = html.indexOf("</pre>", colon);
         if (end < 0) {
-            end = html.indexOf("</div>", at);
+            end = html.indexOf("</div>", colon);
         }
         if (end < 0) {
             return null;
         }
-        var linkifier = new PhpStanTypeBodyLinkifier(variable.getProject(), null);
-        String linked = linkifier.linkify(escape(typeText()));
-        return html.substring(0, at) + marker + " " + linked + html.substring(end);
+        return html.substring(0, colon + 1) + " " + linkedTypeText() + html.substring(end);
+    }
+
+    /**
+     * タグの中 (`style="color:#..."` の `:` 等) を飛ばして、本文としての文字を探す。
+     */
+    private int textIndexOf(String html, char target, int from) {
+        boolean inTag = false;
+        for (int i = from; i < html.length(); i++) {
+            char c = html.charAt(i);
+            if (c == '<') {
+                inTag = true;
+            } else if (c == '>') {
+                inTag = false;
+            } else if (!inTag && c == target) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    private String linkedTypeText() {
+        return new PhpStanTypeBodyLinkifier(variable.getProject(), null)
+                .linkify(escape(typeText()));
     }
 
     private String escape(String text) {

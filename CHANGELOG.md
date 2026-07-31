@@ -11,6 +11,11 @@
 
 
 
+## 0.47.0
+
+- Keep the standard hover chrome — the namespace link, the coloured variable name, the clickable source — when fixing the type. The patch looked for the literal `$name:`, which never matches because the standard HTML wraps the name in a coloured span, so every hover fell back to the bare minimal page (reported on the real machine). The colon is now found by skipping over tags, and the inserted type text links its class names and keywords.
+- Link the type text in the minimal fallback page too.
+
 ## 0.46.0
 
 - Fix the hover to the resolved type when this plugin's own resolver has decided the branch of the call the variable was assigned from. A decided branch is a refinement, not another approximation, so the coarser members of the union (`array<int, int>` beside a decided `list<int>`) are known to co-describe the same value and can be dropped. An undecided call keeps the conservative folding, where such a pair may be genuine alternatives.
