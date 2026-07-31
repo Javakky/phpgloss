@@ -16,6 +16,7 @@ import com.jetbrains.php.lang.psi.elements.FunctionReference;
 import com.jetbrains.php.lang.psi.elements.Method;
 import com.jetbrains.php.lang.psi.elements.MethodReference;
 import com.jetbrains.php.lang.psi.elements.Parameter;
+import com.jetbrains.php.lang.psi.elements.PhpClass;
 import com.jetbrains.php.lang.psi.elements.PhpNamedElement;
 import com.jetbrains.php.lang.psi.elements.Variable;
 import dev.javakky.phpstantypedoc.type.AliasReturnType;
@@ -38,22 +39,27 @@ import java.util.Optional;
 final class SimplifiedVariableTypeTarget implements DocumentationTarget {
     private final PhpNamedElement variable;
     private final List<String> types;
-    /** 型に添える注記 (`(row_shape: array{...})`)。無いときは空。 */
-    private final String note;
+    /** 型の中に現れるエイリアス。名前をリンクにするために持つ。無いときは null。 */
+    private final @Nullable AliasedType aliased;
     private final PhpStanTypeHtmlRenderer renderer = new PhpStanTypeHtmlRenderer();
 
     private SimplifiedVariableTypeTarget(PhpNamedElement variable, List<String> types) {
-        this(variable, types, "");
+        this(variable, types, null);
     }
 
-    private SimplifiedVariableTypeTarget(PhpNamedElement variable, List<String> types, String note) {
+    private SimplifiedVariableTypeTarget(
+            PhpNamedElement variable, List<String> types, @Nullable AliasedType aliased) {
         this.variable = variable;
         this.types = types;
-        this.note = note;
+        this.aliased = aliased;
     }
 
-    /** 代入元のメソッドが戻り値にエイリアスを書いているときの、宣言のままの型と注記。 */
-    private record AliasedType(String declared, String note) {
+    /**
+     * 代入元のメソッドが戻り値にエイリアスを書いているときの、宣言のままの型。
+     *
+     * <p>本体は並べない。名前がその宣言へのリンクになっていれば、そこから辿れる (実機で指摘)。
+     */
+    private record AliasedType(String declared, String ownerFqn, List<String> aliasNames) {
     }
 
     private static Optional<AliasedType> aliasedFromAssignment(PhpNamedElement variable) {
@@ -74,14 +80,9 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
             if (names.isEmpty() || declared == null) {
                 continue;
             }
-            StringBuilder note = new StringBuilder();
-            for (String name : names) {
-                AliasReturnType.bodyOf(method, name).ifPresent(body ->
-                        note.append(note.isEmpty() ? "" : " ")
-                                .append("(").append(name).append(": ").append(body).append(")"));
-            }
-            if (!note.isEmpty()) {
-                return Optional.of(new AliasedType(declared, note.toString()));
+            PhpClass owner = method.getContainingClass();
+            if (owner != null && owner.getFQN() != null) {
+                return Optional.of(new AliasedType(declared, owner.getFQN(), names));
             }
         }
         return Optional.empty();
@@ -106,7 +107,7 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
         Optional<AliasedType> aliased = aliasedFromAssignment(variable);
         if (aliased.isPresent()) {
             return Optional.of(new SimplifiedVariableTypeTarget(
-                    variable, List.of(aliased.get().declared()), aliased.get().note()));
+                    variable, List.of(aliased.get().declared()), aliased.get()));
         }
         List<String> resolved = resolvedFromAssignment(variable);
         if (!resolved.isEmpty()) {
@@ -274,8 +275,20 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
     }
 
     private String linkedTypeText() {
-        return new PhpStanTypeBodyLinkifier(variable.getProject(), null)
+        String linked = new PhpStanTypeBodyLinkifier(variable.getProject(), null)
                 .linkify(escape(typeText()));
+        return aliased == null ? linked : withAliasLinks(linked);
+    }
+
+    /** 型の中のエイリアス名を、その宣言へのリンクにする。 */
+    private String withAliasLinks(String html) {
+        String result = html;
+        for (String name : aliased.aliasNames()) {
+            String url = PhpStanTypeDocumentationLink.forAlias(aliased.ownerFqn(), name);
+            result = result.replaceAll("\\b" + java.util.regex.Pattern.quote(name) + "\\b",
+                    java.util.regex.Matcher.quoteReplacement("<a href='" + url + "'>" + name + "</a>"));
+        }
+        return result;
     }
 
     private String escape(String text) {
@@ -291,7 +304,6 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
     }
 
     String typeText() {
-        String type = String.join("|", types);
-        return note.isEmpty() ? type : type + " " + note;
+        return String.join("|", types);
     }
 }

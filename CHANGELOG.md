@@ -11,6 +11,11 @@
 
 
 
+## 0.59.0
+
+- Show the alias note when hovering a call, not only its declaration. The note is what carries the alias name — PhpStorm's own `Returns: list<array>` never mentions it — and a call site is where it is usually read.
+- Link the alias name in a variable's type and drop the body beside it. A clickable name is enough to reach the declaration; spelling the shape out again only made the line long.
+
 ## 0.58.0
 
 - Keep the alias name in a variable's type instead of spelling the body out inside it. `$rows = $port->getUsers(...)` showed the whole shape inline across five lines, which is harder to read than the name it was given (reported on the real machine). The variable now reads `list<row_shape>` with `(row_shape: array{...})` beside it — the same note the method's own hover carries. The expanded form still backs the type itself, so element access keeps working.

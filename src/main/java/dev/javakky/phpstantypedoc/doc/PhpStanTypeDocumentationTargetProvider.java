@@ -33,6 +33,12 @@ public final class PhpStanTypeDocumentationTargetProvider implements Documentati
         if (variable.isPresent()) {
             return List.of(variable.get());
         }
+        // 呼び出しの側でも、解決先の宣言にエイリアスの注記を出す
+        Optional<PhpFunctionDocumentationTarget> call =
+                PhpFunctionDocumentationTarget.atCall(file, offset, resolver);
+        if (call.isPresent()) {
+            return List.of(call.get());
+        }
         return PhpFunctionDocumentationTarget.at(file, offset, resolver)
                 .<List<? extends DocumentationTarget>>map(List::of)
                 .orElseGet(List::of);

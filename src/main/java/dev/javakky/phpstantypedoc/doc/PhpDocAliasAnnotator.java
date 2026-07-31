@@ -20,9 +20,6 @@ import java.util.Optional;
  * 加工処理を共有する。
  */
 public final class PhpDocAliasAnnotator {
-    /** 本体をそのまま並べると表示が崩れる。読み取れる長さで切る。 */
-    private static final int BODY_LIMIT = 120;
-
     private static final String PARAMETERS_LABEL = "Parameters:";
     private static final String RETURNS_LABEL = "Returns:";
 
@@ -190,25 +187,8 @@ public final class PhpDocAliasAnnotator {
                 ? name
                 : "<a href='" + PhpStanTypeDocumentationLink.forAlias(ownerClassFqn, alias.typeName())
                         + "'>" + name + "</a>";
-        return "&nbsp;<code>(" + labelled + bodyOf(alias) + ")</code>";
-    }
-
-    /**
-     * エイリアス名だけでは、それがどんな形かは分からない。名前に続けて本体を書き添える。
-     *
-     * <p>PhpStorm は `list<row_shape>` を `list<array>` としか出せないため、名前を添えるだけでは
-     * shape が読めないままになる (実機で指摘)。長い本体は途中で切る。
-     */
-    private String bodyOf(ResolvedAlias alias) {
-        String body = alias.resolvedType().typeBody();
-        if (body == null || body.isBlank()) {
-            return "";
-        }
-        String collapsed = body.replaceAll("\\s+", " ").trim();
-        String shortened = collapsed.length() > BODY_LIMIT
-                ? collapsed.substring(0, BODY_LIMIT) + " …"
-                : collapsed;
-        return ": " + PhpStanTypeHtmlRenderer.escape(shortened);
+        // 本体は添えない。名前から辿れれば足りる (実機で指摘)
+        return "&nbsp;<code>(" + labelled + ")</code>";
     }
 
     private record ParameterAlias(String parameterName, List<ResolvedAlias> aliases) {

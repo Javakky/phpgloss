@@ -78,11 +78,8 @@ public final class AliasInReturnTypeTest extends BasePlatformTestCase {
         String shown = dev.javakky.phpstantypedoc.doc.VariableHoverProbe.typeAt(
                 file, rows.getTextRange().getStartOffset() + 1);
 
-        // 開いた形を並べると読みにくい。名前を残し、本体は `(名前: 本体)` で添える
-        assertTrue("エイリアス名が残っていない: " + shown, shown.contains("list<row_shape>"));
-        assertTrue("本体が添えられていない: " + shown, shown.contains("(row_shape: array{"));
-        assertFalse("型の中に本体が展開されている: " + shown,
-                shown.startsWith("list<array{"));
+        // 開いた形を並べると読みにくい。名前を残し、そこから宣言へ飛べれば足りる
+        assertEquals("エイリアス名のままでない: " + shown, "list<row_shape>", shown);
     }
 
     /**
@@ -100,8 +97,34 @@ public final class AliasInReturnTypeTest extends BasePlatformTestCase {
         String html = targets.isEmpty() ? ""
                 : String.valueOf(targets.getFirst().computeDocumentation());
 
-        String visible = html.replaceAll("<[^>]*>", "").replace("&lt;", "<").replace("&gt;", ">");
-        assertTrue("エイリアス名が出ていない: " + visible, visible.contains("row_shape"));
-        assertTrue("本体が添えられていない: " + visible, visible.contains("user_id"));
+        assertTrue("エイリアス名の注記が出ていない: " + html, html.contains("(<a href="));
+        assertTrue("注記がエイリアスを指していない: " + html, html.contains("row_shape"));
+    }
+
+    /** 呼び出しの側からでも、解決先の宣言にエイリアスの注記が出る。 */
+    public void testShowsTheAliasNoteFromTheCallSite() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
+        int offset = SOURCE.indexOf("->getUsers([1, 2])") + 4;
+
+        var targets = new dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider()
+                .documentationTargets(file, offset);
+        String html = targets.isEmpty() ? ""
+                : String.valueOf(targets.getFirst().computeDocumentation());
+
+        assertTrue("呼び出しの側で注記が出ていない: " + html, html.contains("row_shape"));
+    }
+
+    /** 変数の型に出るエイリアス名は、その宣言へのリンクになっている。 */
+    public void testLinksTheAliasNameOnTheVariable() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
+        var rows = PsiTreeUtil.findChildrenOfType(file, Variable.class).stream()
+                .filter(v -> "rows".equals(v.getName())).findFirst().orElseThrow();
+
+        var target = new dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider()
+                .documentationTargets(file, rows.getTextRange().getStartOffset() + 1);
+        String html = target.isEmpty() ? "" : String.valueOf(target.getFirst().computeDocumentation());
+
+        assertTrue("エイリアス名がリンクになっていない: " + html,
+                html.contains(">row_shape</a>"));
     }
 }

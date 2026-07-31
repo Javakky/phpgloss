@@ -10,6 +10,7 @@ import com.intellij.psi.PsiFile;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.jetbrains.php.lang.documentation.PhpDocumentationProvider;
 import com.jetbrains.php.lang.psi.elements.Function;
+import com.jetbrains.php.lang.psi.elements.MethodReference;
 import dev.javakky.phpstantypedoc.PhpStanTypeResolverFacade;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
@@ -44,6 +45,41 @@ final class PhpFunctionDocumentationTarget implements DocumentationTarget {
                 .map(annotator -> new PhpFunctionDocumentationTarget(function, annotator));
     }
 
+
+    /**
+     * 呼び出しの側から、その解決先の宣言を見せる。
+     *
+     * <p>宣言の上にいるときだけ引き受けると、呼び出しに合わせたホバーではエイリアスの注記が
+     * 出ないままになる (実機で指摘)。
+     */
+    static Optional<PhpFunctionDocumentationTarget> atCall(
+            PsiFile file,
+            int offset,
+            PhpStanTypeResolverFacade resolver
+    ) {
+        PsiElement element = file.findElementAt(offset);
+        MethodReference reference = PsiTreeUtil.getParentOfType(element, MethodReference.class, false);
+        if (reference == null || reference.getNameNode() == null
+                || !reference.getNameNode().getTextRange().containsOffset(offset)) {
+            return Optional.empty();
+        }
+        for (var resolved : reference.multiResolve(false)) {
+            if (!(resolved.getElement() instanceof Function declared)) {
+                continue;
+            }
+            PsiFile declaringFile = declared.getContainingFile();
+            if (declaringFile == null) {
+                continue;
+            }
+            Optional<PhpFunctionDocumentationTarget> target =
+                    PhpDocAliasAnnotator.of(declaringFile, declared, resolver)
+                            .map(annotator -> new PhpFunctionDocumentationTarget(declared, annotator));
+            if (target.isPresent()) {
+                return target;
+            }
+        }
+        return Optional.empty();
+    }
 
     @Override
     public @NotNull Pointer<? extends DocumentationTarget> createPointer() {
