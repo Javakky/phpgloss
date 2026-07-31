@@ -11,6 +11,12 @@
 
 
 
+## 0.57.0
+
+- Find a type alias wherever it is written, not only when it is the whole type. `@return list<row_shape>` left the hover showing `list<array>` with no mention of the alias, because the name was looked up as the entire declared type. Every identifier in the type is now looked up, so an alias inside a type argument, a union, or an array shape is found — and several in one type are all reported.
+- Write the alias body beside its name. The name alone does not say what shape it is, and PhpStorm cannot show it (`list<array>` is as far as it goes). The existing `(name)` note becomes `(name: array{...})`, cut off when the body is long. The declared type itself is left alone — it is PhpStorm's, and replacing it would drop the links and colouring it carries.
+- Expand an alias when resolving a call, so a variable assigned from such a method carries the shape rather than a bare `array`.
+
 ## 0.56.0
 
 - Show the type read from an array literal when PhpStorm's own answer disagrees. Keys written as class constants (`[Region::NORTH => [...], Region::SOUTH => [...]]`) are seen as integer keys, so a lookup table came out as `array<int, string>[]` where its keys are strings. The literal states its keys, and reading them was already done for binding type variables — the same reading now reaches the variable itself. Nothing is claimed when an element or key is unreadable, or when PhpStorm already agrees.

@@ -80,7 +80,10 @@ final class PhpFunctionDocumentationTarget implements DocumentationTarget {
     @Override
     public @Nullable DocumentationResult computeDocumentation() {
         String html = provider.generateDoc(function, function);
-        return html == null ? null : DocumentationResult.documentation(annotator.annotate(html));
+        if (html == null) {
+            return null;
+        }
+        return DocumentationResult.documentation(annotator.annotate(html));
     }
 
     PsiElement contextElement() {

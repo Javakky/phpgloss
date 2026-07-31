@@ -40,6 +40,11 @@ public final class ResolvedCallType {
         PhpType resolved = reference instanceof MethodReference method
                 ? CallSiteGenericResolver.resolveMethodHere(method)
                 : reference.getName() != null ? CallSiteGenericResolver.resolveCallHere(reference) : null;
+        if (resolved == null || resolved.isEmpty()) {
+            // 型変数が無くても、戻り値に書かれた型エイリアスは開ける
+            resolved = reference instanceof MethodReference method
+                    ? AliasExpansion.returnTypeOf(method) : null;
+        }
         return resolved == null || resolved.isEmpty() ? Optional.empty() : Optional.of(resolved);
     }
 }

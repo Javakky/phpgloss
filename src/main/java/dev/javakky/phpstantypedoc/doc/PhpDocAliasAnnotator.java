@@ -20,20 +20,23 @@ import java.util.Optional;
  * 加工処理を共有する。
  */
 public final class PhpDocAliasAnnotator {
+    /** 本体をそのまま並べると表示が崩れる。読み取れる長さで切る。 */
+    private static final int BODY_LIMIT = 120;
+
     private static final String PARAMETERS_LABEL = "Parameters:";
     private static final String RETURNS_LABEL = "Returns:";
 
     private final List<ParameterAlias> parameterAliases;
-    private final ResolvedAlias returnAlias;
+    private final List<ResolvedAlias> returnAliases;
     private final String ownerClassFqn;
 
     private PhpDocAliasAnnotator(
             List<ParameterAlias> parameterAliases,
-            ResolvedAlias returnAlias,
+            List<ResolvedAlias> returnAliases,
             String ownerClassFqn
     ) {
         this.parameterAliases = parameterAliases;
-        this.returnAlias = returnAlias;
+        this.returnAliases = returnAliases;
         this.ownerClassFqn = ownerClassFqn;
     }
 
@@ -51,20 +54,70 @@ public final class PhpDocAliasAnnotator {
         }
         List<ParameterAlias> parameters = new ArrayList<>();
         for (Parameter parameter : function.getParameters()) {
-            String typeName = PhpDocDeclaredTypeReader.typeNameFor(
+            String typeName = PhpDocDeclaredTypeReader.unionTypeFor(
                     function.getDocComment(), PhpDocDeclaredTypeReader.PARAM_TAGS, parameter.getName());
-            resolve(file, ownerClass.getFQN(), typeName, resolver)
-                    .ifPresent(alias -> parameters.add(new ParameterAlias(parameter.getName(), alias)));
+            List<ResolvedAlias> aliases = resolveAll(file, ownerClass.getFQN(), typeName, resolver);
+            if (!aliases.isEmpty()) {
+                parameters.add(new ParameterAlias(parameter.getName(), aliases));
+            }
         }
-        String returnTypeName = PhpDocDeclaredTypeReader.typeNameFor(
+        String returnTypeName = PhpDocDeclaredTypeReader.unionTypeFor(
                 function.getDocComment(), PhpDocDeclaredTypeReader.RETURN_TAGS, null);
-        ResolvedAlias resolvedReturn =
-                resolve(file, ownerClass.getFQN(), returnTypeName, resolver).orElse(null);
-        if (parameters.isEmpty() && resolvedReturn == null) {
+        List<ResolvedAlias> resolvedReturn =
+                resolveAll(file, ownerClass.getFQN(), returnTypeName, resolver);
+        if (parameters.isEmpty() && resolvedReturn.isEmpty()) {
             return Optional.empty();
         }
         return Optional.of(new PhpDocAliasAnnotator(
                 List.copyOf(parameters), resolvedReturn, ownerClass.getFQN()));
+    }
+
+    /**
+     * 型テキストに現れるエイリアス名を、書かれた順にすべて拾う。
+     *
+     * <p>`list<row_shape>` のように型引数の中で使われることが多く、型全体を名前として
+     * 引いても見つからない (実機で `Returns: list<array>` のまま出ていた)。
+     */
+    private static List<ResolvedAlias> resolveAll(
+            PsiFile file,
+            String ownerClassFqn,
+            String typeName,
+            PhpStanTypeResolverFacade resolver
+    ) {
+        if (typeName == null) {
+            return List.of();
+        }
+        List<ResolvedAlias> aliases = new ArrayList<>();
+        java.util.Set<String> seen = new java.util.LinkedHashSet<>();
+        for (String identifier : identifiersOf(typeName)) {
+            if (!seen.add(identifier)) {
+                continue;
+            }
+            resolve(file, ownerClassFqn, identifier, resolver).ifPresent(aliases::add);
+        }
+        return List.copyOf(aliases);
+    }
+
+    /** 型テキストから識別子だけを取り出す。array shape のキー (直後が `:`) は名前ではない。 */
+    private static List<String> identifiersOf(String type) {
+        List<String> identifiers = new ArrayList<>();
+        int cursor = 0;
+        while (cursor < type.length()) {
+            if (!Character.isLetter(type.charAt(cursor)) && type.charAt(cursor) != '_') {
+                cursor++;
+                continue;
+            }
+            int end = cursor;
+            while (end < type.length()
+                    && (Character.isLetterOrDigit(type.charAt(end)) || type.charAt(end) == '_')) {
+                end++;
+            }
+            if (end >= type.length() || type.charAt(end) != ':') {
+                identifiers.add(type.substring(cursor, end));
+            }
+            cursor = end;
+        }
+        return identifiers;
     }
 
     private static Optional<ResolvedAlias> resolve(
@@ -85,7 +138,7 @@ public final class PhpDocAliasAnnotator {
     }
 
     private String addReturnAlias(String html) {
-        if (returnAlias == null) {
+        if (returnAliases.isEmpty()) {
             return html;
         }
         int returns = html.indexOf(RETURNS_LABEL);
@@ -97,9 +150,9 @@ public final class PhpDocAliasAnnotator {
         if (valueCellEnd < 0) {
             return html;
         }
-        return html.substring(0, valueCellEnd)
-                + aliasName(returnAlias)
-                + html.substring(valueCellEnd);
+        StringBuilder appended = new StringBuilder();
+        returnAliases.forEach(alias -> appended.append(aliasName(alias)));
+        return html.substring(0, valueCellEnd) + appended + html.substring(valueCellEnd);
     }
 
 
@@ -124,7 +177,7 @@ public final class PhpDocAliasAnnotator {
             }
             int insertion = variableEnd + marker.length();
             section = section.substring(0, insertion)
-                    + aliasName(parameterAlias.alias())
+                    + parameterAlias.aliases().stream().map(this::aliasName).reduce("", String::concat)
                     + section.substring(insertion);
         }
         return html.substring(0, parameters) + section + html.substring(sectionEnd);
@@ -133,14 +186,32 @@ public final class PhpDocAliasAnnotator {
     /** エイリアス名を、そのエイリアス自身の documentation へのリンクにする。 */
     private String aliasName(ResolvedAlias alias) {
         String name = PhpStanTypeHtmlRenderer.escape(alias.typeName());
-        if (ownerClassFqn == null || ownerClassFqn.isBlank()) {
-            return "&nbsp;<code>(" + name + ")</code>";
-        }
-        String url = PhpStanTypeDocumentationLink.forAlias(ownerClassFqn, alias.typeName());
-        return "&nbsp;<code>(<a href='" + url + "'>" + name + "</a>)</code>";
+        String labelled = ownerClassFqn == null || ownerClassFqn.isBlank()
+                ? name
+                : "<a href='" + PhpStanTypeDocumentationLink.forAlias(ownerClassFqn, alias.typeName())
+                        + "'>" + name + "</a>";
+        return "&nbsp;<code>(" + labelled + bodyOf(alias) + ")</code>";
     }
 
-    private record ParameterAlias(String parameterName, ResolvedAlias alias) {
+    /**
+     * エイリアス名だけでは、それがどんな形かは分からない。名前に続けて本体を書き添える。
+     *
+     * <p>PhpStorm は `list<row_shape>` を `list<array>` としか出せないため、名前を添えるだけでは
+     * shape が読めないままになる (実機で指摘)。長い本体は途中で切る。
+     */
+    private String bodyOf(ResolvedAlias alias) {
+        String body = alias.resolvedType().typeBody();
+        if (body == null || body.isBlank()) {
+            return "";
+        }
+        String collapsed = body.replaceAll("\\s+", " ").trim();
+        String shortened = collapsed.length() > BODY_LIMIT
+                ? collapsed.substring(0, BODY_LIMIT) + " …"
+                : collapsed;
+        return ": " + PhpStanTypeHtmlRenderer.escape(shortened);
+    }
+
+    private record ParameterAlias(String parameterName, List<ResolvedAlias> aliases) {
     }
 
     private record ResolvedAlias(String typeName, PhpStanResolvedType resolvedType) {
