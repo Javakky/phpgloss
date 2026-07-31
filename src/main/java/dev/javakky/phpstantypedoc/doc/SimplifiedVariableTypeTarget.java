@@ -13,9 +13,12 @@ import com.intellij.psi.util.PsiTreeUtil;
 import com.jetbrains.php.lang.psi.elements.AssignmentExpression;
 import com.jetbrains.php.lang.psi.elements.Function;
 import com.jetbrains.php.lang.psi.elements.FunctionReference;
+import com.jetbrains.php.lang.psi.elements.Method;
+import com.jetbrains.php.lang.psi.elements.MethodReference;
 import com.jetbrains.php.lang.psi.elements.Parameter;
 import com.jetbrains.php.lang.psi.elements.PhpNamedElement;
 import com.jetbrains.php.lang.psi.elements.Variable;
+import dev.javakky.phpstantypedoc.type.AliasReturnType;
 import dev.javakky.phpstantypedoc.type.ArgumentText;
 import dev.javakky.phpstantypedoc.type.ResolvedCallType;
 import dev.javakky.phpstantypedoc.type.TypeUnionSimplifier;
@@ -35,11 +38,53 @@ import java.util.Optional;
 final class SimplifiedVariableTypeTarget implements DocumentationTarget {
     private final PhpNamedElement variable;
     private final List<String> types;
+    /** 型に添える注記 (`(row_shape: array{...})`)。無いときは空。 */
+    private final String note;
     private final PhpStanTypeHtmlRenderer renderer = new PhpStanTypeHtmlRenderer();
 
     private SimplifiedVariableTypeTarget(PhpNamedElement variable, List<String> types) {
+        this(variable, types, "");
+    }
+
+    private SimplifiedVariableTypeTarget(PhpNamedElement variable, List<String> types, String note) {
         this.variable = variable;
         this.types = types;
+        this.note = note;
+    }
+
+    /** 代入元のメソッドが戻り値にエイリアスを書いているときの、宣言のままの型と注記。 */
+    private record AliasedType(String declared, String note) {
+    }
+
+    private static Optional<AliasedType> aliasedFromAssignment(PhpNamedElement variable) {
+        if (!(variable instanceof Variable)) {
+            return Optional.empty();
+        }
+        PsiElement value = variable.getParent() instanceof AssignmentExpression assignment
+                && assignment.getVariable() == variable ? assignment.getValue() : null;
+        if (!(value instanceof MethodReference call)) {
+            return Optional.empty();
+        }
+        for (var resolved : call.multiResolve(false)) {
+            if (!(resolved.getElement() instanceof Method method)) {
+                continue;
+            }
+            List<String> names = AliasReturnType.aliasNamesOf(method);
+            String declared = AliasReturnType.declaredTextOf(method).orElse(null);
+            if (names.isEmpty() || declared == null) {
+                continue;
+            }
+            StringBuilder note = new StringBuilder();
+            for (String name : names) {
+                AliasReturnType.bodyOf(method, name).ifPresent(body ->
+                        note.append(note.isEmpty() ? "" : " ")
+                                .append("(").append(name).append(": ").append(body).append(")"));
+            }
+            if (!note.isEmpty()) {
+                return Optional.of(new AliasedType(declared, note.toString()));
+            }
+        }
+        return Optional.empty();
     }
 
     static Optional<SimplifiedVariableTypeTarget> at(PsiFile file, int offset) {
@@ -55,6 +100,13 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
         List<String> written = writtenFromLiteral(variable);
         if (!written.isEmpty()) {
             return Optional.of(new SimplifiedVariableTypeTarget(variable, written));
+        }
+        // 戻り値にエイリアスが書かれている呼び出しは、開いた形をそのまま並べると読みにくい
+        // (実機で指摘)。書かれた名前を残し、本体はメソッドのホバーと同じ `(名前: 本体)` で添える
+        Optional<AliasedType> aliased = aliasedFromAssignment(variable);
+        if (aliased.isPresent()) {
+            return Optional.of(new SimplifiedVariableTypeTarget(
+                    variable, List.of(aliased.get().declared()), aliased.get().note()));
         }
         List<String> resolved = resolvedFromAssignment(variable);
         if (!resolved.isEmpty()) {
@@ -239,6 +291,7 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
     }
 
     String typeText() {
-        return String.join("|", types);
+        String type = String.join("|", types);
+        return note.isEmpty() ? type : type + " " + note;
     }
 }

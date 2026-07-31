@@ -11,6 +11,9 @@ import dev.javakky.phpstantypedoc.PhpStanTypeResolverFacade;
 import dev.javakky.phpstantypedoc.parser.PhpDocDeclaredTypeReader;
 import org.jetbrains.annotations.Nullable;
 
+import java.util.ArrayList;
+import java.util.List;
+
 
 /**
  * 戻り値に書かれた型エイリアスを、その本体に置き換える。
@@ -25,6 +28,8 @@ final class AliasExpansion {
     private static final PhpStanTypeResolverFacade RESOLVER = new PhpStanTypeResolverFacade();
     /** 入れ子のエイリアス (`@phpstan-type a array{b: b_record}`) を開く深さの上限。 */
     private static final int MAX_DEPTH = 8;
+    /** 表示に添える本体の長さ。そのまま並べると読めない。 */
+    private static final int BODY_LIMIT = 160;
 
     private AliasExpansion() {
     }
@@ -109,7 +114,13 @@ final class AliasExpansion {
             // 直後が `:` ならエイリアス名ではなく array shape のキー
             boolean shapeKey = end < type.length() && type.charAt(end) == ':';
             String body = shapeKey ? null : bodyOf(file, ownerFqn, name);
-            result.append(body == null ? name : "(" + body + ")");
+            if (body == null) {
+                result.append(name);
+            } else {
+                // 本体が union のときだけ弧で囲む。それ以外に付けると型の中に括弧が残る
+                boolean needsParentheses = body.contains("|") || body.contains("&");
+                result.append(needsParentheses ? "(" + body + ")" : body);
+            }
             cursor = end;
         }
         return result.toString();
@@ -129,6 +140,64 @@ final class AliasExpansion {
 
     private static boolean isNamePart(char c) {
         return Character.isLetterOrDigit(c) || c == '_';
+    }
+
+    /** `@return` に書かれたままの型。 */
+    static @Nullable String declaredReturnTextOf(Method method) {
+        PhpDocComment doc = method.getDocComment();
+        return doc == null ? null : PhpDocDeclaredTypeReader.unionTypeFor(
+                doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
+    }
+
+    /** エイリアスの本体を 1 行に畳んだもの。長いものは途中で切る。 */
+    static @Nullable String bodyTextOf(Method method, String aliasName) {
+        PhpClass owner = method.getContainingClass();
+        if (owner == null || owner.getContainingFile() == null || owner.getFQN() == null) {
+            return null;
+        }
+        String body = bodyOf(owner.getContainingFile(), owner.getFQN(), aliasName);
+        if (body == null) {
+            return null;
+        }
+        String collapsed = body.replaceAll("\\s+", " ").trim();
+        return collapsed.length() > BODY_LIMIT ? collapsed.substring(0, BODY_LIMIT) + " …" : collapsed;
+    }
+
+    /**
+     * メソッドの戻り値に書かれた型エイリアスの名前。展開できたものだけを書かれた順に返す。
+     */
+    static List<String> aliasNamesOf(Method method) {
+        PhpDocComment doc = method.getDocComment();
+        PhpClass owner = method.getContainingClass();
+        if (doc == null || owner == null || owner.getContainingFile() == null
+                || owner.getFQN() == null) {
+            return List.of();
+        }
+        String declared = PhpDocDeclaredTypeReader.unionTypeFor(
+                doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
+        if (declared == null) {
+            return List.of();
+        }
+        List<String> names = new ArrayList<>();
+        int cursor = 0;
+        while (cursor < declared.length()) {
+            if (!isNameStart(declared.charAt(cursor))) {
+                cursor++;
+                continue;
+            }
+            int end = cursor;
+            while (end < declared.length() && isNamePart(declared.charAt(end))) {
+                end++;
+            }
+            String name = declared.substring(cursor, end);
+            boolean shapeKey = end < declared.length() && declared.charAt(end) == ':';
+            if (!shapeKey && !names.contains(name)
+                    && bodyOf(owner.getContainingFile(), owner.getFQN(), name) != null) {
+                names.add(name);
+            }
+            cursor = end;
+        }
+        return List.copyOf(names);
     }
 
     /**

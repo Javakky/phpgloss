@@ -78,7 +78,11 @@ public final class AliasInReturnTypeTest extends BasePlatformTestCase {
         String shown = dev.javakky.phpstantypedoc.doc.VariableHoverProbe.typeAt(
                 file, rows.getTextRange().getStartOffset() + 1);
 
-        assertTrue("変数の表示にエイリアスが開かれていない: " + shown, shown.contains("user_id"));
+        // 開いた形を並べると読みにくい。名前を残し、本体は `(名前: 本体)` で添える
+        assertTrue("エイリアス名が残っていない: " + shown, shown.contains("list<row_shape>"));
+        assertTrue("本体が添えられていない: " + shown, shown.contains("(row_shape: array{"));
+        assertFalse("型の中に本体が展開されている: " + shown,
+                shown.startsWith("list<array{"));
     }
 
     /**

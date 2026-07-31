@@ -11,6 +11,11 @@
 
 
 
+## 0.58.0
+
+- Keep the alias name in a variable's type instead of spelling the body out inside it. `$rows = $port->getUsers(...)` showed the whole shape inline across five lines, which is harder to read than the name it was given (reported on the real machine). The variable now reads `list<row_shape>` with `(row_shape: array{...})` beside it — the same note the method's own hover carries. The expanded form still backs the type itself, so element access keeps working.
+- Stop wrapping an expanded alias in parentheses unless its body is a union. They were added for every alias and left stray brackets in the middle of a type.
+
 ## 0.57.0
 
 - Find a type alias wherever it is written, not only when it is the whole type. `@return list<row_shape>` left the hover showing `list<array>` with no mention of the alias, because the name was looked up as the entire declared type. Every identifier in the type is now looked up, so an alias inside a type argument, a union, or an array shape is found — and several in one type are all reported.
