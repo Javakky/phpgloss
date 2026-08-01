@@ -3,8 +3,52 @@
     <name>PHPStan Type Documentation</name>
     <vendor email="dev@javakky.dev">javakky</vendor>
     <description><![CDATA[
-        Shows Quick Documentation and Go to Declaration for PHPStan type aliases in PHPDoc.
+        <p>PhpStorm reads PHPDoc, but not all of it. Type aliases collapse to <code>array</code>,
+        conditional return types come back as both branches at once, and a type variable inside a
+        type argument is never filled in. This plugin resolves those in the IDE, so the type you
+        see matches the type PHPStan infers.</p>
+
+        <h3>Type aliases</h3>
+        <ul>
+            <li>Hover a <code>@phpstan-type</code> or <code>@phpstan-import-type</code> alias to see
+                the shape it stands for.</li>
+            <li>Go to Declaration jumps from a reference to its declaration, and from a declaration
+                to its usages.</li>
+            <li>Key access on a shape imported from another file resolves, instead of
+                <code>mixed</code>.</li>
+            <li>Aliases declared on interfaces and traits work the same as on classes.</li>
+        </ul>
+
+        <h3>Type keywords</h3>
+        <p>The 84 keywords PHPStan and Psalm reserve — <code>non-empty-string</code>,
+        <code>positive-int</code>, <code>class-string</code> and the rest — are explained on hover,
+        with Go to Declaration opening the code that defines them. Descriptions are quoted from the
+        upstream classes, and shown in Japanese when the IDE is in Japanese.</p>
+
+        <h3>Type inference</h3>
+        <ul>
+            <li>Conditional return types are evaluated against the arguments at the call site,
+                including nested ones.</li>
+            <li>Type variables inside type arguments are resolved, and carried into
+                <code>__invoke</code>.</li>
+            <li>A <code>callable(V, K): E</code> binds <code>E</code> from the closure passed in.</li>
+            <li>Refinements written in <code>@var</code> survive instead of flattening.</li>
+            <li>A branch the arguments cannot decide is left alone — no type is better than a wrong
+                one.</li>
+        </ul>
+
+        <p>The plugin runs no external process and makes no network request. It does not run
+        PHPStan.</p>
     ]]></description>
+
+    <change-notes><![CDATA[
+        <h3>0.64.0</h3>
+        <ul>
+            <li>Do not read the type of an argument that is itself a call. Reading it resolves that expression, which walks back to the outer call and trips PhpStorm's recursion guard; the failure surfaces as `TypeProvider contract violation`, twenty-two of them while indexing a large project — more than every PHP-plugin provider combined. Nested calls like `array_values(Grouping::by(...))` are where it happens. Variables and literals state their own type, so following them does not come back.</li>
+            <li>The two earlier attempts (0.62.0, 0.63.0) narrowed the wrong paths. The condition came from disassembling `PhpTypeInfo`, which wraps whatever a provider throws — the recursion guard was the thrower.</li>
+        </ul>
+        <p>Full history: <a href="https://github.com/javakky/phpstan-type-documentation/blob/main/CHANGELOG.md">CHANGELOG.md</a></p>
+    ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.jetbrains.php</depends>

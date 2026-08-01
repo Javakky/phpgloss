@@ -1,0 +1,29 @@
+PHPStan Type Documentation
+Copyright (c) 2026 javakky
+
+This product is licensed under the MIT License. See LICENSE.
+
+--------------------------------------------------------------------------------
+Bundled third-party sources
+--------------------------------------------------------------------------------
+
+The plugin bundles source files from Psalm and PHPStan so that a keyword's
+definition can be opened even when the project has neither installed. They are
+read-only copies, used for navigation and for the descriptions shown on hover.
+Where a project has its own copy under vendor/, that one is opened instead.
+
+Psalm — https://github.com/vimeo/psalm — MIT License
+  src/main/resources/dev/javakky/phpstantypedoc/vendored/psalm-Atomic.php
+  src/main/resources/dev/javakky/phpstantypedoc/vendored/psalm-TIntRange.php
+  src/main/resources/dev/javakky/phpstantypedoc/vendored/psalm-TPropertiesOf.php
+  src/main/resources/dev/javakky/phpstantypedoc/vendored/psalm-TypeParser.php
+  src/main/resources/dev/javakky/phpstantypedoc/vendored/psalm-TypeTokenizer.php
+  Full licence text: vendored/psalm-LICENSE.txt
+
+PHPStan — https://github.com/phpstan/phpstan-src — MIT License
+  src/main/resources/dev/javakky/phpstantypedoc/vendored/phpstan-TypeNodeResolver.php
+  Full licence text: vendored/phpstan-LICENSE.txt
+
+The English wording of the keyword descriptions is quoted from the class
+docblocks of those same projects where upstream provides one. The Japanese
+translations are original to this plugin.

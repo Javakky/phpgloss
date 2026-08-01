@@ -1,75 +1,113 @@
 # PHPStan Type Documentation
 
-PHPStan Type Documentation is an IntelliJ IDEA plugin that shows Quick Documentation for `@phpstan-type` and `@phpstan-import-type` aliases in PHPDoc, and navigates PHPDoc alias references to the actual type definition.
+PhpStorm reads PHPDoc, but not all of it. Type aliases collapse to `array`, conditional return
+types come back as both branches at once, and a type variable that sits inside a type argument is
+never filled in. This plugin resolves those in the IDE, so the type you see matches the type
+PHPStan infers.
 
-It also teaches PhpStorm's PHPDoc signature inspection that an alias whose body is an array shape is compatible with a native `array` parameter declaration.
+## What it does
 
-It also fills a gap in PhpStorm's own array shape support. PhpStorm resolves an imported shape only when the `@phpstan-type` is declared in the same file, so key access on a shape imported from another file yields `mixed`. This plugin resolves that case, which restores key completion and key access types.
+### Type aliases
 
-Supported target:
+`@phpstan-type` and `@phpstan-import-type` declare a name for a shape. PhpStorm parses them but
+does not carry the shape through.
 
-- IntelliJ IDEA Ultimate 2026.2.0.1
-- PHP plugin 262.8665.176
-- IntelliJ build range 262 through 262.*
+| | PhpStorm alone | With this plugin |
+|---|---|---|
+| Hover an alias | nothing | the shape it stands for |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> on a reference | no declaration found | jumps to the declaration |
+| <kbd>Ctrl</kbd>+<kbd>B</kbd> on a declaration | no declaration found | lists the usages |
+| Key access on an imported shape | `mixed` | the key's type, with completion |
+| `@return list<row_shape>` | `list<array>` | the alias name, linked to its declaration |
 
-Example:
+An alias declared on an interface or trait works the same as one on a class — a query port is
+where these are usually written.
 
 ```php
 /**
- * @phpstan-type UserData array{
- *     id: positive-int,
- *     name: non-empty-string
- * }
+ * @phpstan-type row_shape array{user_id: positive-int, user_name: non-empty-string}
  */
-final class User {}
-
-/**
- * @phpstan-import-type UserData from User as CreateUserData
- *
- * @param CreateUserData $payload
- */
-final class CreateUser {}
+interface RecordPort
+{
+    /** @return list<row_shape> */
+    public function getUsers(): array;
+}
 ```
 
-Place the caret on `CreateUserData` in supported type tags and invoke Quick Documentation or Go to Declaration.
+### Type keywords
 
-## Install From Source
+The 84 keywords PHPStan and Psalm reserve — `non-empty-string`, `positive-int`, `class-string`,
+`int-mask-of`, and the rest — carry no meaning in the IDE. Hovering one now explains it, and
+<kbd>Ctrl</kbd>+<kbd>B</kbd> opens the code that defines it: the copy in the project's `vendor/`
+when there is one, otherwise the bundled source.
 
-Build the plugin ZIP:
+Descriptions come from the upstream classes themselves (Psalm's `Type\Atomic\T*` docblocks,
+PHPStan's `Type\Accessory\*`), and are shown in Japanese when the IDE is in Japanese.
+
+Only where a type is actually written. Prose that mentions `list`, and the `as` of an
+`@phpstan-import-type`, are left alone.
+
+### Type inference
+
+PhpStorm resolves a type variable from a call's arguments, but stops short in several places.
+Each of these is resolved here.
+
+| Written | PhpStorm alone | With this plugin |
+|---|---|---|
+| `($mode is Shape::LIST ? list<V> : array<K, V>)` | both branches | the branch the argument selects |
+| `@return Op<V>` | `Op<#V>` | `Op<\App\User>` |
+| `@param callable(V, K): E` | `E` unresolved | bound from the closure's return type |
+| `@return V\|null` | `V` alone | the null is kept |
+| `@var list<positive-int>` | flattened to `int` | `positive-int` survives |
+| `$callback($value)` inside the function | no type | the bound of the return type variable |
+| `[Region::NORTH => …]` | integer keys | the constants' own type |
+
+Conditional return types nest, and nesting is followed — real code writes them three deep. A
+branch that the arguments cannot decide is left alone: no type is better than a wrong one.
+
+## Install
+
+Download the ZIP from the releases page and use **Settings → Plugins → ⚙ → Install Plugin from
+Disk**, or build it yourself:
 
 ```shell
-./gradlew buildPlugin
+./gradlew buildPlugin        # build/distributions/*.zip
 ```
 
-Install `build/distributions/*.zip` using the IDE's local plugin installation action.
+## Supported IDEs
+
+PhpStorm 2025.1 and later, and IntelliJ IDEA Ultimate with the PHP plugin. Verified against
+PhpStorm 2025.1, 2025.2, 2026.1, 2026.2 and IntelliJ IDEA Ultimate 2026.2.
+
+The plugin runs no external process and makes no network request. It does not run PHPStan.
+
+## Known limitations
+
+- Type references are read in `@param`, `@return`, `@var` and their `@phpstan-` forms. Other tags
+  are not scanned.
+- Aliases are read from class, interface, trait and enum PHPDoc. Method, function and file-level
+  aliases are not supported, and inherited aliases are not resolved implicitly.
+- `typeAliases` from a PHPStan config file are not read.
+- A type variable with no `of` bound cannot be shown inside the function that declares it. PHPStan
+  prints `E (function …)`; the IDE has no way to say that.
+- The rendered-doc note and Find Usages rest on experimental platform APIs. They may break on a
+  future IDE; the rest of the plugin does not depend on them.
 
 ## Development
 
-Requirements:
-
-- Java 25. The platform and PHP plugin JARs of build 262 are Java 25 bytecode (class file version 69), so an older JDK cannot read them. If the JDK is not on a path Gradle scans, pass it explicitly:
+Java 25 is required — the platform and PHP plugin JARs are Java 25 bytecode, and an older JDK
+cannot read them.
 
 ```shell
 JAVA_HOME=/path/to/jdk-25 ./gradlew test
-```
-
-Useful commands:
-
-```shell
-./gradlew test
+./gradlew verifyPlugin      # every supported IDE build
 ./gradlew runIde
-./gradlew verifyPlugin
 ```
 
-The plugin does not run PHPStan, PHP, external processes, or network requests at runtime. Gradle may download build dependencies.
+`tools/conformance` measures the inference against PHPStan itself: it collects the type PHPStan
+infers for every variable assignment in a real project, then compares. See its README for how to
+run it; it needs a PHP project with `vendor/bin/phpstan`, so it is not part of CI.
 
-## Known Limitations
+## License
 
-- Type references are detected in `@param`, `@return`, `@var`, `@phpstan-param`, `@phpstan-return`, and `@phpstan-var`, and in the declarations themselves: the name of a `@phpstan-type`, and both the original and the aliased name of a `@phpstan-import-type`. Other tags are not scanned.
-- On a `@phpstan-type` name, Go to Declaration navigates to that same name rather than listing usages.
-- Alias definitions and imports are limited to class, interface, trait, and enum PHPDoc.
-- Method, function, and file-level aliases are not supported.
-- Inherited aliases are not resolved implicitly.
-- Nested aliases are not fully expanded or linkified.
-- PHPStan `typeAliases` from config files are not supported.
-- `DocumentationTarget` and `DocumentationTargetProvider` are marked `@ApiStatus.OverrideOnly` by the platform. Their signatures are unchanged between build 253 and 262, but the plugin targets a single IDE major version because the platform does not guarantee that.
+MIT. The bundled Psalm and PHPStan sources are MIT as well; see `NOTICE`.

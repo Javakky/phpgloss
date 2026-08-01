@@ -11,6 +11,12 @@
 
 
 
+## 0.65.0
+
+- Rewrite the README around what the IDE cannot do on its own. Type inference — the bulk of the work since 0.35 — was not mentioned at all; each feature is now a before-and-after against plain PhpStorm.
+- Write the Marketplace description, the change notes, and a plugin icon.
+- Ship `LICENSE` and a new `NOTICE` inside the plugin, naming the bundled Psalm and PHPStan sources and where their licence texts sit.
+
 ## 0.64.0
 
 - Do not read the type of an argument that is itself a call. Reading it resolves that expression, which walks back to the outer call and trips PhpStorm's recursion guard; the failure surfaces as `TypeProvider contract violation`, twenty-two of them while indexing a large project — more than every PHP-plugin provider combined. Nested calls like `array_values(Grouping::by(...))` are where it happens. Variables and literals state their own type, so following them does not come back.
