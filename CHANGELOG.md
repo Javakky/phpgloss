@@ -11,6 +11,11 @@
 
 
 
+## 0.64.0
+
+- Do not read the type of an argument that is itself a call. Reading it resolves that expression, which walks back to the outer call and trips PhpStorm's recursion guard; the failure surfaces as `TypeProvider contract violation`, twenty-two of them while indexing a large project — more than every PHP-plugin provider combined. Nested calls like `array_values(Grouping::by(...))` are where it happens. Variables and literals state their own type, so following them does not come back.
+- The two earlier attempts (0.62.0, 0.63.0) narrowed the wrong paths. The condition came from disassembling `PhpTypeInfo`, which wraps whatever a provider throws — the recursion guard was the thrower.
+
 ## 0.63.0
 
 - Do not read an argument's type while the index is being built. Reading it resolves that expression (`PhpReferenceImpl.getType`), which is exactly what a type provider may not ask for during indexing — PhpStorm logged twenty-two `TypeProvider contract violation` exceptions on its first pass over a large project, more than the PHP plugin's own providers put together. During indexing only what is written in the source is used; once indexing is done the argument types are read as before. Fixing the array-literal path alone in 0.62.0 was not enough: the argument's own type was the larger source.

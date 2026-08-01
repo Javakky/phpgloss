@@ -98,7 +98,7 @@ final class CallSiteGenericResolver {
             // 実引数の型を取ると、その式の解決が走る (`PhpReferenceImpl.getType`)。索引の構築中に
             // それを要求するのは TypeProvider の契約に反し、例外がログに積まれる (実測: 22 件)。
             // 索引中は型を諦め、書かれたテキストだけで決められるところまでにする
-            if (argument instanceof PhpTypedElement typed && !indexing) {
+            if (argument instanceof PhpTypedElement typed && !indexing && statesItsOwnType(argument)) {
                 encoded.append(escapeSignature(signatureOf(typed)));
             }
             // 条件型は実引数の値 (`Shape::AS_LIST`) で分岐するため、型だけでは足りない
@@ -214,6 +214,18 @@ final class CallSiteGenericResolver {
     private static @Nullable String writtenTypeOf(PsiElement argument, Project project) {
         String written = ArgumentText.writtenVarTypeOf(argument);
         return written != null ? written : ArgumentText.literalArrayTypeOf(argument, project);
+    }
+
+    /**
+     * 型を読んでも他の呼び出しを巻き込まない実引数か。
+     *
+     * <p>`getType` の中で実引数の型を読むと、その式の解決が走る。実引数がまた呼び出しだと
+     * そこから元の式へ戻ってきて、PhpStorm の再帰ガードに引っかかる (実測: 大きなプロジェクトの
+     * 索引で 22 件。`array_values(Grouping::by(...))` のような入れ子で起きる)。
+     * 変数やリテラルは自分の型を自分で言うので、辿っても戻ってこない。
+     */
+    private static boolean statesItsOwnType(PsiElement argument) {
+        return !(argument instanceof FunctionReference);
     }
 
     private static List<Argument> argumentsOf(FunctionReference reference) {
