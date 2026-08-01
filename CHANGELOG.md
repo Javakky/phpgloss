@@ -11,6 +11,10 @@
 
 
 
+## 0.62.0
+
+- Stop resolving other files while the index is being built. Reading an array literal's element types called `global()`, which asks for a resolve the index is not ready to answer; PhpStorm logged eighteen `TypeProvider contract violation` exceptions during its first indexing pass. The literal is now read with local types alone on that path, and the full read stays where it is allowed — resolving a call outside indexing.
+
 ## 0.61.0
 
 - Support PhpStorm 2025.1 through the newest build, instead of 2026.2 alone. Only one thing stood in the way: `PhpType.splitTopLevelUnion` arrived in 2026.1 and accounted for all ten incompatibilities on 2025.2. The PHP plugin's own method is still used wherever it exists, and a local one steps in only where it does not — the split has to agree with the platform, and a permanent copy would drift from it.

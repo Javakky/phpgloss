@@ -102,7 +102,8 @@ final class CallSiteGenericResolver {
             String written = ArgumentText.writtenVarTypeOf(argument);
             if (written == null) {
                 // 書かれた `@var` が無くても、書かれたリテラルからは要素型が組み立てられる
-                written = ArgumentText.literalArrayTypeOf(argument, reference.getProject());
+                // ここは索引の構築中に走る。他ファイルを引くと contract violation になる
+                written = ArgumentText.literalArrayTypeOf(argument, reference.getProject(), false);
             }
             if (written != null) {
                 // `@var list<positive-int>` の精密化は PhpStorm の型に残らないため、書かれた

@@ -82,6 +82,16 @@ public final class ArgumentText {
      * @return `list<null|int>` の形。配列リテラルでない、または要素の型が読めないときは null
      */
     public static @Nullable String literalArrayTypeOf(PsiElement argument, Project project) {
+        return literalArrayTypeOf(argument, project, true);
+    }
+
+    /**
+     * @param resolveGlobally 他のファイルを引いてよいか。索引の構築中 ({@code getType} の経路) は
+     *                        false にする。索引中に他ファイルを解決すると TypeProvider の契約に
+     *                        反し、例外がログに積まれる (実測: PhpStorm の索引で 18 件)
+     */
+    public static @Nullable String literalArrayTypeOf(
+            PsiElement argument, Project project, boolean resolveGlobally) {
         PsiElement value = argument instanceof Variable variable ? assignedCaseOf(variable) : argument;
         if (!(value instanceof ArrayCreationExpression literal)) {
             return null;
@@ -97,7 +107,7 @@ public final class ArgumentText {
                 element = hash.getValue();
                 // キーの型も書かれている。`array-key` で埋めると実引数から取れた型より粗くなる
                 if (hash.getKey() instanceof PhpTypedElement key) {
-                    keys.addAll(key.getType().global(project).getTypes());
+                    keys.addAll(typesOf(key, project, resolveGlobally));
                 }
             }
             // 要素は型を持たないラッパーに包まれている (実測: PhpPsiElementImpl)。中の式を取る
@@ -106,7 +116,7 @@ public final class ArgumentText {
             if (typed == null) {
                 continue;
             }
-            for (String type : typed.getType().global(project).getTypes()) {
+            for (String type : typesOf(typed, project, resolveGlobally)) {
                 // 要素そのものが読めないなら、union に混ぜると全体を粗くしてしまう
                 if (type.isBlank() || type.equals("?") || type.endsWith("mixed")) {
                     return null;
@@ -125,6 +135,14 @@ public final class ArgumentText {
         return keys.isEmpty() || keys.stream().anyMatch(k -> k.isBlank() || k.endsWith("mixed"))
                 ? null
                 : "array<" + String.join("|", keys) + ", " + elementType + ">";
+    }
+
+    /** 索引中は他ファイルを引かない。ローカルに読める型だけを使う。 */
+    private static java.util.Collection<String> typesOf(
+            PhpTypedElement element, Project project, boolean resolveGlobally) {
+        return resolveGlobally
+                ? element.getType().global(project).getTypes()
+                : element.getType().getTypes();
     }
 
     /**
