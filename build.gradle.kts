@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "dev.javakky"
-version = "0.67.0"
+version = "0.68.0"
 
 // 開発対象とプラグイン検証対象を同じ IDE ビルドに揃える。
 val platformVersion = "2026.2.0.1"
@@ -79,7 +79,7 @@ tasks {
 
         // 適合スイープの走査先を差し替えられるようにする (既定は the sample project)。
         for (key in listOf("conformance.answers", "conformance.project", "conformance.report",
-                "conformance.directories", "conformance.reportOnly")) {
+                "conformance.directories", "conformance.reportOnly", "perf.report")) {
             System.getProperty(key)?.let { systemProperty(key, it) }
         }
     }

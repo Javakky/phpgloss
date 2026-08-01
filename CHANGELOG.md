@@ -11,6 +11,10 @@
 
 
 
+## 0.68.0
+
+- Measure how long resolution takes, so a regression there is caught rather than felt. A call resolves in about 2.4 ms and a hover in about 2.5 ms on the development machine; a second pass over the same file costs nothing, which is the cache doing its job. The test fails if either goes past 5 ms or if the second pass stops being cheaper.
+
 ## 0.67.0
 
 - Test what the README claims, and what it says cannot be done. Two claims had no test behind them — an alias declared on a trait, and every one of the 84 keywords being found where a type is written — and two documented limits (method-level aliases, inherited aliases) were only asserted in prose. All four hold; the tests keep them honest.
