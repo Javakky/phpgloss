@@ -11,6 +11,9 @@ import com.jetbrains.php.lang.psi.elements.Variable;
  * (計測: 4,618 代入のうち 696 が shape、84 がオプショナルキー、101 が 2 段以上の入れ子)。
  *
  * <p>ここで書く形は構文の骨組みだけで、どのプロジェクトのものでもない。
+ *
+ * <p>見るのは型システムに入った成分。PhpStorm 自身の `array` や `mixed` が同じ union に並ぶが、
+ * それは表示のときに整理される (`VariableTypeUnionHoverTest`)。ここでは shape が取り出せるかだけを見る。
  */
 public final class ArrayShapeInferenceTest extends BasePlatformTestCase {
     private String typeOf(String source, String variable) {

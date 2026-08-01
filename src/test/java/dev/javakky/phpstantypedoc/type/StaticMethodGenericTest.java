@@ -64,6 +64,8 @@ public final class StaticMethodGenericTest extends BasePlatformTestCase {
 
         assertTrue("静的メソッドの型変数が解けていない: " + parts,
                 parts.contains("non-empty-list<\\Probe\\User>"));
+        assertFalse("解けたのに粗い型が混ざっている: " + parts,
+                parts.contains("mixed") || parts.equals("?"));
     }
 
     private Set<String> typeOf(String variableName) {

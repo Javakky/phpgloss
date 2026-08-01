@@ -84,6 +84,8 @@ public final class TemplateClassBoundTest extends BasePlatformTestCase {
 
         assertTrue("上界のクラス名が完全修飾されていない: " + parts,
                 parts.contains("list<\\Probe\\Wrapper>"));
+        assertFalse("解けたのに粗い型が混ざっている: " + parts,
+                parts.contains("mixed") || parts.equals("?"));
     }
 
     /**

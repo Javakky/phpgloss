@@ -52,6 +52,8 @@ public final class GroupByRegressionTest extends BasePlatformTestCase {
 
         assertTrue("分類キーが string にならない: " + type,
                 type.replace(" ", "").contains("array<string,"));
+        assertFalse("解けたのに粗い型が混ざっている: " + type,
+                type.contains("mixed") || type.equals("?"));
         assertTrue("値がグループの list にならない: " + type, type.contains("list<"));
     }
 }

@@ -63,6 +63,8 @@ public final class RemainingGapsTest extends BasePlatformTestCase {
 ;
 
         assertTrue("要素型が mixed に潰れている: " + type, type.contains("int"));
+        assertFalse("解けたのに粗い型が混ざっている: " + type,
+                type.contains("mixed") || type.equals("?"));
         assertTrue("null が落ちている: " + type, type.contains("null"));
         assertFalse("mixed が残っている: " + type, type.contains("mixed"));
     }

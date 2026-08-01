@@ -40,6 +40,8 @@ public final class ConditionalShapesTest extends BasePlatformTestCase {
                 """, "render");
 
         assertTrue("整数の側の分岐を選べていない: " + type, type.contains("string"));
+        assertFalse("解けたのに粗い型が混ざっている: " + type,
+                type.contains("mixed") || type.equals("?"));
     }
 
     /** 主語が引数そのもの (`$strict is true`)。真偽リテラルで決まる。 */

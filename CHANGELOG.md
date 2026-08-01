@@ -11,6 +11,11 @@
 
 
 
+## 0.70.0
+
+- Stop qualifying an array shape as if it were a class. `array{type: string}` had its base cut off at the brace and came back as `\Probe\array{type: string}` — a class that does not exist. Partial-match assertions let it through; it surfaced once the tests started checking that nothing coarse was mixed into a resolved type.
+- Check that a resolved type carries nothing coarse alongside it, in eleven of the inference tests. `assertTrue(type.contains("list<int>"))` passes just as happily on `list<int>|mixed`, and this plugin exists to be precise.
+
 ## 0.69.0
 
 - Measure whether the tests actually hold the implementation up: break one mechanism at a time and count what fails (`tools/mutation`). Every mechanism turns out to be covered, the thinnest being the refinement swap at two tests — now five, one per branch.

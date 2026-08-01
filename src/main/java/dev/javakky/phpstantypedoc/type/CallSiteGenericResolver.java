@@ -883,6 +883,12 @@ final class CallSiteGenericResolver {
                     .orElse(declared);
         }
         int angle = declared.indexOf('<');
+        int brace = declared.indexOf('{');
+        if (brace >= 0 && (angle < 0 || brace < angle)) {
+            // `array{a: int}` は array shape で、クラス名ではない。基底を切り出すと `array` が
+            // 残り、修飾して `\Probe\array{...}` という存在しない名前になっていた
+            return declared;
+        }
         String base = angle < 0 ? declared : declared.substring(0, angle);
         if (base.startsWith("\\") || base.isBlank() || function.getContainingFile() == null) {
             return declared;

@@ -64,6 +64,8 @@ public final class RealWorldMapTest extends BasePlatformTestCase {
         var parts = typeOf("asList");
 
         assertTrue("list<string> になっていない: " + parts, parts.contains("list<\\string>"));
+        assertFalse("解けたのに粗い型が混ざっている: " + parts,
+                parts.contains("mixed") || parts.equals("?"));
     }
 
     /**

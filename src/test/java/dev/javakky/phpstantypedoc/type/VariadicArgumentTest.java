@@ -66,6 +66,8 @@ public final class VariadicArgumentTest extends BasePlatformTestCase {
         var parts = typeOf("same");
 
         assertTrue("可変長引数から型変数を決められていない: " + parts, parts.contains("list<\\int>"));
+        assertFalse("解けたのに粗い型が混ざっている: " + parts,
+                parts.contains("mixed") || parts.equals("?"));
     }
 
     /**

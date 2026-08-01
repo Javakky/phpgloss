@@ -74,6 +74,8 @@ public final class IntersectionTemplateTest extends BasePlatformTestCase {
 
         assertTrue("交差型から型変数を決められていない: " + parts,
                 parts.contains("non-empty-list<\\Probe\\Bag>"));
+        assertFalse("解けたのに粗い型が混ざっている: " + parts,
+                parts.contains("mixed") || parts.equals("?"));
     }
 
     /**

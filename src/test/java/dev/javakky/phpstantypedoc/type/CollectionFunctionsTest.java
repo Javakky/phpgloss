@@ -147,6 +147,8 @@ public final class CollectionFunctionsTest extends BasePlatformTestCase {
 
         assertTrue("chunkBy の戻り値が解けていない: " + parts,
                 parts.contains("list<non-empty-list<\\int>>"));
+        assertFalse("解けたのに粗い型が混ざっている: " + parts,
+                parts.contains("mixed") || parts.equals("?"));
     }
 
     public void testChunksAStringList() {
