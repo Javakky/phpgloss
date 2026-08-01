@@ -11,6 +11,11 @@
 
 
 
+## 0.69.0
+
+- Measure whether the tests actually hold the implementation up: break one mechanism at a time and count what fails (`tools/mutation`). Every mechanism turns out to be covered, the thinnest being the refinement swap at two tests — now five, one per branch.
+- The first version of that measurement injected into the middle of a parameter list, so nothing compiled and every mechanism read as zero tests. A measurement that cannot tell "not covered" from "not measured" is worse than none; the script now reports `COMPILE_NG` separately, and the README says why.
+
 ## 0.68.0
 
 - Measure how long resolution takes, so a regression there is caught rather than felt. A call resolves in about 2.4 ms and a hover in about 2.5 ms on the development machine; a second pass over the same file costs nothing, which is the cache doing its job. The test fails if either goes past 5 ms or if the second pass stops being cheaper.

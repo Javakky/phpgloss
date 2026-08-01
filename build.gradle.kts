@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "dev.javakky"
-version = "0.68.0"
+version = "0.69.0"
 
 // 開発対象とプラグイン検証対象を同じ IDE ビルドに揃える。
 val platformVersion = "2026.2.0.1"
