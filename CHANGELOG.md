@@ -11,6 +11,12 @@
 
 
 
+## 0.61.0
+
+- Support PhpStorm 2025.1 through the newest build, instead of 2026.2 alone. Only one thing stood in the way: `PhpType.splitTopLevelUnion` arrived in 2026.1 and accounted for all ten incompatibilities on 2025.2. The PHP plugin's own method is still used wherever it exists, and a local one steps in only where it does not — the split has to agree with the platform, and a permanent copy would drift from it.
+- Match the platform's splitting exactly. Writing the fallback surfaced two disagreements the copy would have introduced silently: surrounding spaces are kept (`int | null` splits into `"int "` and `" null"`), and an empty type yields one empty member rather than none. A test compares both implementations across the shapes that occur in practice.
+- No upper bound on the IDE version. Nothing in use is version-specific enough to justify locking newer IDEs out.
+
 ## 0.60.0
 
 - Look up interfaces and traits, not only classes. Every lookup went through `getClassesByFQN`, which returns classes alone, so an alias declared on an interface could be linked but never opened — the log recorded `classes=0` and the click did nothing. Query ports and other interface-declared aliases are the common case for `@phpstan-type`. The same lookup backs imported shapes, generic type arguments and keyword definitions, all of which had the same blind spot.

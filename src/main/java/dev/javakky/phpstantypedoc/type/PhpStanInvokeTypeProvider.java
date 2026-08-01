@@ -127,7 +127,7 @@ public final class PhpStanInvokeTypeProvider implements PhpTypeProvider4 {
      */
     private PhpType completeSignature(String encoded, Project project) {
         PhpType raw = new PhpType();
-        PhpType.splitTopLevelUnion(encoded.replace(UNION_ESCAPE, '|')).forEach(raw::add);
+        PhpTypeText.splitTopLevelUnion(encoded.replace(UNION_ESCAPE, '|')).forEach(raw::add);
         return PhpIndex.getInstance(project).completeType(project, raw, new HashSet<>());
     }
 
@@ -207,7 +207,7 @@ public final class PhpStanInvokeTypeProvider implements PhpTypeProvider4 {
     private static PhpType withPluralForm(String type) {
         // union を 1 成分のまま add すると union として扱われない。分けて足す
         PhpType resolved = new PhpType();
-        for (String part : PhpType.splitTopLevelUnion(type)) {
+        for (String part : PhpTypeText.splitTopLevelUnion(type)) {
             resolved.add(part);
             String plural = TemplateSubstitution.pluralFormOf(part);
             if (plural != null) {

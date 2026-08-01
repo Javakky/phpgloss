@@ -68,7 +68,7 @@ final class AliasExpansion {
             return null;
         }
         PhpType type = new PhpType();
-        for (String part : PhpType.splitTopLevelUnion(expanded)) {
+        for (String part : PhpTypeText.splitTopLevelUnion(expanded)) {
             type.add(part);
         }
         return type.isEmpty() ? null : type;

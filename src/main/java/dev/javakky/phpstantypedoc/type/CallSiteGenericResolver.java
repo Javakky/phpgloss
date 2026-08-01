@@ -410,7 +410,7 @@ final class CallSiteGenericResolver {
         }
         // 置換を先に行う。修飾が先だと裸の型変数 `V` が `\Probe\V` に化け、
         // 未解決の検出 (語としての `V` を探す) をすり抜けて型として漏れる
-        String substituted = PhpType.splitTopLevelUnion(nullableExpandedOf(declaredReturn)).stream()
+        String substituted = PhpTypeText.splitTopLevelUnion(nullableExpandedOf(declaredReturn)).stream()
                 .map(part -> qualify(TemplateSubstitution.apply(part.trim(), bindings), function))
                 .reduce((a, b) -> a + "|" + b)
                 .orElse(null);
@@ -423,7 +423,7 @@ final class CallSiteGenericResolver {
         }
         // `positive-int|null` を 1 成分のまま add すると union として扱われない。分けて足す
         PhpType resolved = new PhpType();
-        for (String part : PhpType.splitTopLevelUnion(substituted)) {
+        for (String part : PhpTypeText.splitTopLevelUnion(substituted)) {
             resolved.add(part);
             String plural = TemplateSubstitution.pluralFormOf(part);
             if (plural != null) {
@@ -558,7 +558,7 @@ final class CallSiteGenericResolver {
     private static String nullableExpandedOf(String declared) {
         List<String> members = new ArrayList<>();
         boolean nullable = false;
-        for (String member : PhpType.splitTopLevelUnion(declared)) {
+        for (String member : PhpTypeText.splitTopLevelUnion(declared)) {
             String trimmed = member.trim();
             if (trimmed.startsWith("?") && trimmed.length() > 1) {
                 nullable = true;
@@ -883,7 +883,7 @@ final class CallSiteGenericResolver {
      * <p>{@code PhpType#add} は文字列を union として分解しないので、先に自分で分ける。
      */
     static PhpType actualTypeOf(Project project, String signature) {
-        List<String> parts = PhpType.splitTopLevelUnion(signature);
+        List<String> parts = PhpTypeText.splitTopLevelUnion(signature);
         PhpType raw = new PhpType();
         parts.forEach(raw::add);
         PhpType completed = PhpIndex.getInstance(project).completeType(project, raw, new HashSet<>());

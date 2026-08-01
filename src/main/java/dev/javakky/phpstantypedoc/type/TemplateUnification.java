@@ -39,7 +39,7 @@ final class TemplateUnification {
             return;
         }
         String trimmed = declared.trim();
-        List<String> alternatives = PhpType.splitTopLevelUnion(trimmed);
+        List<String> alternatives = PhpTypeText.splitTopLevelUnion(trimmed);
         if (alternatives.size() > 1) {
             // `non-empty-list<V>|array<K, V>` のような union。どの枝からでも型変数は決まりうる
             alternatives.forEach(alternative -> unify(alternative, actual, templates, bindings));
@@ -186,7 +186,7 @@ final class TemplateUnification {
         }
         String declaredTrimmed = declared.trim();
         String writtenTrimmed = written.trim();
-        List<String> alternatives = PhpType.splitTopLevelUnion(declaredTrimmed);
+        List<String> alternatives = PhpTypeText.splitTopLevelUnion(declaredTrimmed);
         if (alternatives.size() > 1) {
             alternatives.forEach(alternative -> unifyText(alternative, writtenTrimmed, templates, bindings));
             return;

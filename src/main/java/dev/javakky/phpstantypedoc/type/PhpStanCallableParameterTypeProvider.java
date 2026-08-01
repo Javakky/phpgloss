@@ -61,7 +61,7 @@ public final class PhpStanCallableParameterTypeProvider implements PhpTypeProvid
             return null;
         }
         PhpType type = new PhpType();
-        for (String part : PhpType.splitTopLevelUnion(expandKeyword(resolved))) {
+        for (String part : PhpTypeText.splitTopLevelUnion(expandKeyword(resolved))) {
             type.add(part);
         }
         return type.isEmpty() ? null : type;

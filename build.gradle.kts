@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "dev.javakky"
-version = "0.60.0"
+version = "0.61.0"
 
 // 開発対象とプラグイン検証対象を同じ IDE ビルドに揃える。
 val platformVersion = "2026.2.0.1"
@@ -45,14 +45,21 @@ intellijPlatform {
         version = project.version.toString()
 
         ideaVersion {
-            sinceBuild = "262"
-            untilBuild = "262.*"
+            // 実測で 2025.2 (252) まで Compatible。上限は置かない —
+            // 使っている API はどれも安定側で、新しい IDE を弾く理由が無い
+            sinceBuild = "252"
         }
     }
 
     pluginVerification {
         ides {
+            // PhpStorm が主戦場。PHP を本体に持つため、IDEA + PHP plugin とは構成が違う
+            create(IntelliJPlatformType.PhpStorm, platformVersion)
             create(IntelliJPlatformType.IntellijIdeaUltimate, platformVersion)
+            // 互換範囲を広げられるかの実測用。ここが通らない版は sinceBuild に含めない
+            create(IntelliJPlatformType.PhpStorm, "2026.1")
+            create(IntelliJPlatformType.PhpStorm, "2025.2")
+            create(IntelliJPlatformType.PhpStorm, "2025.1")
         }
     }
 }

@@ -119,7 +119,7 @@ final class CallableUnification {
      * 実引数の型から `\Closure<...>` を探して読む。型引数を持たない `\Closure` は形が無いので null。
      */
     private static @Nullable Shape closureShapeOf(String signature) {
-        for (String member : PhpType.splitTopLevelUnion(signature)) {
+        for (String member : PhpTypeText.splitTopLevelUnion(signature)) {
             int angle = member.indexOf('<');
             if (angle < 0 || !member.endsWith(">") || !CLOSURE.equals(member.substring(0, angle))) {
                 continue;
