@@ -11,6 +11,11 @@
 
 
 
+## 0.67.0
+
+- Test what the README claims, and what it says cannot be done. Two claims had no test behind them — an alias declared on a trait, and every one of the 84 keywords being found where a type is written — and two documented limits (method-level aliases, inherited aliases) were only asserted in prose. All four hold; the tests keep them honest.
+- Test the shapes a half-written PHPDoc takes: a circular alias, an unclosed type, an unclosed conditional, sixty levels of nesting, and a call passed to itself. None of them throws.
+
 ## 0.66.0
 
 - Evaluate a conditional return type that uses no type variable. `($value is int ? non-empty-string : int)` is valid on its own, but the whole path was gated behind a type variable being bound, so nothing was resolved. Every fixture written so far happened to declare `@template`, which is why it went unnoticed.
