@@ -80,7 +80,14 @@ public final class PhpDocDeclaredTypeReader {
 
     /**
      * 先頭の型を、空白区切りの説明文の手前まで読む。`|` が続く限り次の語も型として繋ぐ。
+     *
+     * <p>`callable(V): non-empty-string` のように `:` の先に戻り型が続く形も 1 つの型として読む。
+     * 以前は呼び出し側にも同じ処理があり、片方だけ直したせいで callable の戻り型が落ちていた。
      */
+    public static String firstTypeOf(String body) {
+        return firstUnionTokenOf(body);
+    }
+
     private static String firstUnionTokenOf(String body) {
         StringBuilder type = new StringBuilder();
         int cursor = 0;

@@ -704,7 +704,7 @@ final class CallSiteGenericResolver {
         if (raw != null) {
             // `@return V|null 説明文` の union を丸ごと読む。PhpDocType 経由 (typeNameFor) は
             // union の先頭しか返さず、`|null` が落ちる (実測: Option 型の null が消えた)
-            return ConditionalReturnType.parse(raw) != null ? raw : firstTypeTokenOf(raw);
+            return ConditionalReturnType.parse(raw) != null ? raw : PhpDocDeclaredTypeReader.firstTypeOf(raw);
         }
         return PhpDocDeclaredTypeReader.unionTypeFor(doc, PhpDocDeclaredTypeReader.RETURN_TAGS, null);
     }
@@ -718,23 +718,6 @@ final class CallSiteGenericResolver {
                 : ConditionalReturnType.resolve(declared, callSite);
     }
 
-    /**
-     * 型の直後に説明文が続く形から、型だけを取り出す。型引数の中の空白は区切りにしない。
-     */
-    private static String firstTypeTokenOf(String body) {
-        int depth = 0;
-        for (int i = 0; i < body.length(); i++) {
-            char c = body.charAt(i);
-            if (c == '<' || c == '{' || c == '(') {
-                depth++;
-            } else if (c == '>' || c == '}' || c == ')') {
-                depth--;
-            } else if (depth == 0 && Character.isWhitespace(c)) {
-                return body.substring(0, i);
-            }
-        }
-        return body;
-    }
 
     /**
      * `@phpstan-return` に書かれた本文をそのまま読む。条件型は {@code PhpDocType} にならないため、
@@ -884,9 +867,14 @@ final class CallSiteGenericResolver {
         }
         int angle = declared.indexOf('<');
         int brace = declared.indexOf('{');
+        int paren = declared.indexOf('(');
+        // `array{a: int}` は array shape、`callable(int): string` は callable 型で、どちらも
+        // クラス名ではない。基底を `<` だけで切ると `array` や `callable` が残り、修飾して
+        // `\Probe\array{...}` という存在しない名前になっていた
         if (brace >= 0 && (angle < 0 || brace < angle)) {
-            // `array{a: int}` は array shape で、クラス名ではない。基底を切り出すと `array` が
-            // 残り、修飾して `\Probe\array{...}` という存在しない名前になっていた
+            return declared;
+        }
+        if (paren >= 0 && (angle < 0 || paren < angle)) {
             return declared;
         }
         String base = angle < 0 ? declared : declared.substring(0, angle);

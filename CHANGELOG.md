@@ -11,6 +11,12 @@
 
 
 
+## 0.71.0
+
+- Stop qualifying a `callable(...)` type as if it were a class, the same mistake array shapes had. `callable(V): string` came back as `\Probe\callable(int):` — a class that does not exist, with the return type gone.
+- Keep the return type of a `callable`. Two copies of "read the first type, stop at the description" existed; 0.66.0 fixed the one in the declared-type reader, and the copy inside the call-site resolver kept cutting at the colon. There is one now.
+- Check that every type this plugin builds is still a type: brackets balanced, no namespace glued onto a keyword. Run over twelve differently-shaped declarations, it caught both defects above.
+
 ## 0.70.0
 
 - Stop qualifying an array shape as if it were a class. `array{type: string}` had its base cut off at the brace and came back as `\Probe\array{type: string}` — a class that does not exist. Partial-match assertions let it through; it surfaced once the tests started checking that nothing coarse was mixed into a resolved type.
