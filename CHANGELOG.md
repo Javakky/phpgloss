@@ -11,6 +11,10 @@
 
 
 
+## 0.63.0
+
+- Do not read an argument's type while the index is being built. Reading it resolves that expression (`PhpReferenceImpl.getType`), which is exactly what a type provider may not ask for during indexing — PhpStorm logged twenty-two `TypeProvider contract violation` exceptions on its first pass over a large project, more than the PHP plugin's own providers put together. During indexing only what is written in the source is used; once indexing is done the argument types are read as before. Fixing the array-literal path alone in 0.62.0 was not enough: the argument's own type was the larger source.
+
 ## 0.62.0
 
 - Stop resolving other files while the index is being built. Reading an array literal's element types called `global()`, which asks for a resolve the index is not ready to answer; PhpStorm logged eighteen `TypeProvider contract violation` exceptions during its first indexing pass. The literal is now read with local types alone on that path, and the full read stays where it is allowed — resolving a call outside indexing.

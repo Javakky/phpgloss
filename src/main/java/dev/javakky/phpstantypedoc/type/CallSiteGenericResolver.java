@@ -84,6 +84,7 @@ final class CallSiteGenericResolver {
      * 索引後に名前だけで引くと `\A\filter` と `\B\filter` が混ざる。
      */
     static String encode(FunctionReference reference) {
+        boolean indexing = com.intellij.openapi.project.DumbService.isDumb(reference.getProject());
         StringBuilder encoded = new StringBuilder(namespaceOf(reference.getContainingFile()));
         encoded.append(FIELD);
         if (reference instanceof MethodReference method
@@ -94,7 +95,10 @@ final class CallSiteGenericResolver {
         encoded.append(reference.getName());
         for (PsiElement argument : reference.getParameters()) {
             encoded.append(FIELD);
-            if (argument instanceof PhpTypedElement typed) {
+            // 実引数の型を取ると、その式の解決が走る (`PhpReferenceImpl.getType`)。索引の構築中に
+            // それを要求するのは TypeProvider の契約に反し、例外がログに積まれる (実測: 22 件)。
+            // 索引中は型を諦め、書かれたテキストだけで決められるところまでにする
+            if (argument instanceof PhpTypedElement typed && !indexing) {
                 encoded.append(escapeSignature(signatureOf(typed)));
             }
             // 条件型は実引数の値 (`Shape::AS_LIST`) で分岐するため、型だけでは足りない
@@ -102,8 +106,8 @@ final class CallSiteGenericResolver {
             String written = ArgumentText.writtenVarTypeOf(argument);
             if (written == null) {
                 // 書かれた `@var` が無くても、書かれたリテラルからは要素型が組み立てられる
-                // ここは索引の構築中に走る。他ファイルを引くと contract violation になる
-                written = ArgumentText.literalArrayTypeOf(argument, reference.getProject(), false);
+                // 索引中は他ファイルを引かない。索引外なら書かれた要素の型まで読める
+                written = ArgumentText.literalArrayTypeOf(argument, reference.getProject(), !indexing);
             }
             if (written != null) {
                 // `@var list<positive-int>` の精密化は PhpStorm の型に残らないため、書かれた
