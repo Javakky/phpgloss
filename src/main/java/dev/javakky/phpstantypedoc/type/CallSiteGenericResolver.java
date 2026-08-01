@@ -370,12 +370,15 @@ final class CallSiteGenericResolver {
         // 変性付きの宣言 (`@template-covariant`) は PhpStorm 側の一覧に載らない
         templates.addAll(GenericTypeArguments.templates(doc).keySet());
         templates.addAll(seed.keySet());
-        if (templates.isEmpty()) {
+        String rawReturn = returnDeclarationOf(doc);
+        if (rawReturn == null) {
             return null;
         }
-        String rawReturn = returnDeclarationOf(doc);
-        if (rawReturn == null || !mentionsTemplate(rawReturn, templates)) {
-            // 型変数を含まない戻り値は PhpStorm が既に解いている
+        // 条件型は型変数を使わずに書ける (`($value is int ? A : B)`)。PhpStorm は分岐を
+        // 選ばず両方を返すので、型変数が一つも無くてもこちらで畳む値がある
+        boolean conditional = ConditionalReturnType.looksConditional(rawReturn);
+        if (!conditional && (templates.isEmpty() || !mentionsTemplate(rawReturn, templates))) {
+            // 型変数も条件も無い戻り値は PhpStorm が既に解いている
             return null;
         }
         Parameter[] parameters = function.getParameters();
@@ -417,7 +420,9 @@ final class CallSiteGenericResolver {
                     declared, actualTypeOf(project, argument.signature()), templates, bindings);
         }
         fillFromBounds(doc, function, templates, bindings);
-        if (bindings.isEmpty()) {
+        if (bindings.isEmpty() && !ConditionalReturnType.looksConditional(rawReturn)) {
+            // 型変数が一つも決まらなくても、条件型なら実引数で分岐を選べる
+            // (`($value is int ? A : B)` のように型変数を使わない条件型が書ける)
             return null;
         }
         // 条件型の主語が型変数のことがある (`(R is null ? ... : ...)`)。束縛が決まってから畳む

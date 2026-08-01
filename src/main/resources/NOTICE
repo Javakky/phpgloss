@@ -13,6 +13,8 @@ read-only copies, used for navigation and for the descriptions shown on hover.
 Where a project has its own copy under vendor/, that one is opened instead.
 
 Psalm — https://github.com/vimeo/psalm — MIT License
+  Taken from the 6.x line, unmodified. The exact revision was not recorded; to
+  check a file against upstream, compare it with the same path in that repository.
   dev/javakky/phpstantypedoc/vendored/psalm-Atomic.php
   dev/javakky/phpstantypedoc/vendored/psalm-TIntRange.php
   dev/javakky/phpstantypedoc/vendored/psalm-TPropertiesOf.php
@@ -21,6 +23,8 @@ Psalm — https://github.com/vimeo/psalm — MIT License
   Full licence text: dev/javakky/phpstantypedoc/vendored/psalm-LICENSE.txt
 
 PHPStan — https://github.com/phpstan/phpstan-src — MIT License
+  Taken from the 2.x line, unmodified. The exact revision was not recorded; to
+  check a file against upstream, compare it with the same path in that repository.
   dev/javakky/phpstantypedoc/vendored/phpstan-TypeNodeResolver.php
   Full licence text: dev/javakky/phpstantypedoc/vendored/phpstan-LICENSE.txt
 

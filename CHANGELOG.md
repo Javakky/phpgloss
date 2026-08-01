@@ -11,6 +11,13 @@
 
 
 
+## 0.66.0
+
+- Evaluate a conditional return type that uses no type variable. `($value is int ? non-empty-string : int)` is valid on its own, but the whole path was gated behind a type variable being bound, so nothing was resolved. Every fixture written so far happened to declare `@template`, which is why it went unnoticed.
+- Decide a condition written on a boolean (`$strict is true`). Only integers and strings were read.
+- Test the conditional forms PHPStan allows, not just the one shape the fixtures had settled into: eleven of the fifteen conditional fixtures decided on an enum case, and the two gaps above were both outside that shape.
+- Record where the bundled Psalm and PHPStan sources came from, and say plainly that the exact revision was not kept.
+
 ## 0.65.0
 
 - Rewrite the README around what the IDE cannot do on its own. Type inference — the bulk of the work since 0.35 — was not mentioned at all; each feature is now a before-and-after against plain PhpStorm.
@@ -47,7 +54,7 @@
 
 ## 0.58.0
 
-- Keep the alias name in a variable's type instead of spelling the body out inside it. `$rows = $port->getUsers(...)` showed the whole shape inline across five lines, which is harder to read than the name it was given (reported on the real machine). The variable now reads `list<row_shape>` with `(row_shape: array{...})` beside it — the same note the method's own hover carries. The expanded form still backs the type itself, so element access keeps working.
+- Keep the alias name in a variable's type instead of spelling the body out inside it. `$rows = $port->getUsers(...)` showed the whole shape inline across five lines, which is harder to read than the name it was given (found in practice). The variable now reads `list<row_shape>` with `(row_shape: array{...})` beside it — the same note the method's own hover carries. The expanded form still backs the type itself, so element access keeps working.
 - Stop wrapping an expanded alias in parentheses unless its body is a union. They were added for every alias and left stray brackets in the middle of a type.
 
 ## 0.57.0
@@ -113,7 +120,7 @@
 
 ## 0.47.0
 
-- Keep the standard hover chrome — the namespace link, the coloured variable name, the clickable source — when fixing the type. The patch looked for the literal `$name:`, which never matches because the standard HTML wraps the name in a coloured span, so every hover fell back to the bare minimal page (reported on the real machine). The colon is now found by skipping over tags, and the inserted type text links its class names and keywords.
+- Keep the standard hover chrome — the namespace link, the coloured variable name, the clickable source — when fixing the type. The patch looked for the literal `$name:`, which never matches because the standard HTML wraps the name in a coloured span, so every hover fell back to the bare minimal page (found in practice). The colon is now found by skipping over tags, and the inserted type text links its class names and keywords.
 - Link the type text in the minimal fallback page too.
 
 ## 0.46.0
@@ -123,7 +130,7 @@
 
 ## 0.45.0
 
-- Patch the type text inside PHP's own hover instead of replacing the whole page. The rebuilt hover lost the namespace link and the full source path (reported on the real machine); the standard HTML now stays and only the type is swapped.
+- Patch the type text inside PHP's own hover instead of replacing the whole page. The rebuilt hover lost the namespace link and the full source path (found in practice); the standard HTML now stays and only the type is swapped.
 - Fold `array<array-key, X>` into `X[]` — an unbounded key says nothing — so the bound-filled key from the resolver is subsumed by PhpStorm's own `array<string, int>` instead of being shown beside it.
 - Treat spellings that differ only in spacing (`array<string,int>` vs `array<string, int>`) as one type. Folding `array<int, X>` into `list<X>` was considered and rejected: a union may hold genuine alternatives — an unresolved conditional keeps both branches — and there keeping only the narrower side would claim a list for a value that may not be one. Only types never written as an alternative on their own (`?`, `mixed`, bare `array`, the plural form) are folded.
 

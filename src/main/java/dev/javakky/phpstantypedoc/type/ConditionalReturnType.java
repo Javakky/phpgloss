@@ -35,7 +35,8 @@ record ConditionalReturnType(
     private static final Set<String> KEYED_TYPES = Set.of("array", "non-empty-array", "iterable");
     /** リテラルで判定できる型キーワード。 */
     private static final Set<String> LITERAL_TYPES = Set.of(
-            "int", "positive-int", "negative-int", "non-negative-int", "non-positive-int", "string");
+            "int", "positive-int", "negative-int", "non-negative-int", "non-positive-int", "string",
+            "true", "false", "bool");
     /** キーがこの型なら、その配列は list ではない。 */
     private static final Set<String> STRING_TYPES = Set.of(
             "string", "non-empty-string", "class-string", "numeric-string", "literal-string",
@@ -262,6 +263,16 @@ record ConditionalReturnType(
         if (isStringLiteral(argumentText)) {
             return conditionType.equals("string");
         }
+        // `$strict is true` のように、真偽そのものを条件に書ける
+        String trimmed = argumentText.trim();
+        if (trimmed.equals("true") || trimmed.equals("false")) {
+            return switch (conditionType) {
+                case "true" -> trimmed.equals("true");
+                case "false" -> trimmed.equals("false");
+                case "bool" -> true;
+                default -> false;
+            };
+        }
         Long value = integerValueOf(argumentText);
         return value == null ? null : matchesIntegerType(conditionType, value);
     }
@@ -449,7 +460,7 @@ record ConditionalReturnType(
     /**
      * 条件型として読めなかったのに条件型に見えるもの。型として出すと意味不明な型になる。
      */
-    private static boolean looksConditional(String type) {
+    static boolean looksConditional(String type) {
         return type.trim().startsWith("(") && indexOfWord(type, "is") >= 0;
     }
 }
