@@ -7,7 +7,7 @@ import com.jetbrains.php.lang.psi.elements.PhpTypedElement;
 import com.jetbrains.php.lang.psi.elements.Variable;
 
 /**
- * 実物 the sample project の `intersect` で出た誤り (実機 2026-07-31):
+ * 実際のコードに書かれている形の `intersect` で出た誤り (実機 2026-07-31):
  * `$result: array<array-key, int>|array<string,int>`。
  *
  * <p>第 2 引数の宣言 `array<array-key, V>` の `array-key` は型キーワードであって型変数でない。

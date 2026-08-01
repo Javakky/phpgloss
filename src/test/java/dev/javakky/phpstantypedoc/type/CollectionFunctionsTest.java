@@ -11,7 +11,7 @@ import com.jetbrains.php.lang.psi.resolve.types.PhpType;
 import java.util.Set;
 
 /**
- * 実物 the sample project の `reduce` / `groupBy` / `any` / `chunkBy` の PHPDoc をそのまま写して測る。
+ * 実際のコードに書かれている形の `reduce` / `groupBy` / `any` / `chunkBy` の PHPDoc をそのまま写して測る。
  *
  * <p>自分で書いた fixture では通るのに実物では効かない、という差がこれまで 2 度出ている
  * (`@phpstan-param` にも条件型が書かれている / 3 段の入れ子)。同族の関数をまとめて固定する。

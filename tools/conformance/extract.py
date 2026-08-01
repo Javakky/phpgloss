@@ -8,7 +8,7 @@
     python3 extract.py <phpプロジェクトのルート> <対象パス...> [-o answers.json]
 
 例:
-    python3 extract.py ~/projects/the sample project tests src -o answers.json
+    python3 extract.py /path/to/php-project src tests -o answers.json
 
 出力 (JSON): [{"file": "tests/MapTest.php", "line": 15, "var": "result", "type": "list<int>"}]
 テストケース作成の使い方: type に @template 由来の総称が現れる行が fixture 候補。

@@ -19,8 +19,8 @@ public final class AliasInReturnTypeTest extends BasePlatformTestCase {
 
             /**
              * @phpstan-type row_shape array{
-             *     user_id: positive-int,
-             *     user_name: string
+             *     id: positive-int,
+             *     name: string
              * }
              */
             interface RecordPort
@@ -29,7 +29,7 @@ public final class AliasInReturnTypeTest extends BasePlatformTestCase {
                  * @param list<positive-int> $ids
                  * @return list<row_shape>
                  */
-                public function getUsers(array $ids): array;
+                public function fetchRows(array $ids): array;
 
                 /**
                  * @return row_shape|null
@@ -43,7 +43,7 @@ public final class AliasInReturnTypeTest extends BasePlatformTestCase {
 
                 public function run(): void
                 {
-                    $rows = $this->port->getUsers([1, 2]);
+                    $rows = $this->port->fetchRows([1, 2]);
                     $one = $this->port->getUser(1);
                 }
             }
@@ -60,13 +60,13 @@ public final class AliasInReturnTypeTest extends BasePlatformTestCase {
     }
 
     public void testExpandsAnAliasInsideATypeArgument() {
-        String type = typeOf("getUsers");
-        assertTrue("エイリアスが展開されていない: " + type, type.contains("user_id"));
+        String type = typeOf("fetchRows");
+        assertTrue("エイリアスが展開されていない: " + type, type.contains("id"));
     }
 
     public void testExpandsAnAliasUsedDirectly() {
         String type = typeOf("getUser");
-        assertTrue("エイリアスが展開されていない: " + type, type.contains("user_id"));
+        assertTrue("エイリアスが展開されていない: " + type, type.contains("id"));
     }
 
     /** 変数の表示にも反映される。 */
@@ -90,7 +90,7 @@ public final class AliasInReturnTypeTest extends BasePlatformTestCase {
      */
     public void testShowsTheExpandedAliasOnTheMethod() {
         var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
-        int offset = SOURCE.indexOf("public function getUsers") + "public function get".length();
+        int offset = SOURCE.indexOf("public function fetchRows") + "public function get".length();
 
         var targets = new dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider()
                 .documentationTargets(file, offset);
@@ -104,7 +104,7 @@ public final class AliasInReturnTypeTest extends BasePlatformTestCase {
     /** 呼び出しの側からでも、解決先の宣言にエイリアスの注記が出る。 */
     public void testShowsTheAliasNoteFromTheCallSite() {
         var file = myFixture.configureByText(PhpFileType.INSTANCE, SOURCE);
-        int offset = SOURCE.indexOf("->getUsers([1, 2])") + 4;
+        int offset = SOURCE.indexOf("->fetchRows([1, 2])") + 4;
 
         var targets = new dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider()
                 .documentationTargets(file, offset);

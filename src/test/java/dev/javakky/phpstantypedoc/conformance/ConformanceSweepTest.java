@@ -33,26 +33,36 @@ import java.util.regex.Pattern;
  */
 public final class ConformanceSweepTest extends BasePlatformTestCase {
     /**
-     * 走査先は差し替えられる。既定はこの plugin と同じ hobby の the sample project で、
-     * 他のプロジェクト (context の違うものを含む) を見るときは -D で渡す。
-     * その場合、レポートの置き場も呼び出し側が指定する。
+     * 走査先は呼び出し側が指定する。指定が無ければ何も検査しない。
+     *
+     * <pre>
+     * ./gradlew test --tests '*ConformanceSweepTest*' \
+     *     -Dconformance.answers=answers.json \
+     *     -Dconformance.project=/path/to/php-project \
+     *     -Dconformance.report=sweep-report.md
+     * </pre>
      */
-    private static final Path ANSWERS = Path.of(System.getProperty("conformance.answers",
-            System.getProperty("user.home") + "/tools/conformance/out/project-types.json"));
-    private static final Path PROJECT = Path.of(System.getProperty("conformance.project",
-            System.getProperty("user.home") + "/projects/the sample project"));
-    private static final Path REPORT = Path.of(System.getProperty("conformance.report",
-            System.getProperty("user.home") + "/tools/conformance/out/sweep-report.md"));
+    private static final String ANSWERS_PATH = System.getProperty("conformance.answers");
+    private static final String PROJECT_PATH = System.getProperty("conformance.project");
+    private static final String REPORT_PATH = System.getProperty("conformance.report");
+
     /** 走査するディレクトリ。プロジェクトによって置き場が違う。 */
     private static final List<String> DIRECTORIES =
             List.of(System.getProperty("conformance.directories", "src,tests").split(","));
 
     public void testSweepsEveryAssignmentAgainstPhpStan() throws IOException {
+        if (ANSWERS_PATH == null || PROJECT_PATH == null || REPORT_PATH == null) {
+            // 走査先が指定されていない。実プロジェクトへの依存をビルドの前提にしない
+            return;
+        }
+        Path ANSWERS = Path.of(ANSWERS_PATH);
+        Path PROJECT = Path.of(PROJECT_PATH);
+        Path REPORT = Path.of(REPORT_PATH);
         if (!Files.exists(ANSWERS) || !Files.isDirectory(PROJECT)) {
             return;
         }
         List<Answer> answers = Answer.parse(Files.readString(ANSWERS));
-        Map<String, PsiFile> loaded = loadSources();
+        Map<String, PsiFile> loaded = loadSources(PROJECT);
 
         List<String> rows = new ArrayList<>();
         int matched = 0;
@@ -91,7 +101,7 @@ public final class ConformanceSweepTest extends BasePlatformTestCase {
         Files.writeString(REPORT, """
                 # 適合スイープ — PHPStan を正解とした照合
 
-                対象: the sample project (全変数代入)。正解は tools/conformance/extract.py が採取。
+                対象: 走査したプロジェクト (全変数代入)。正解は tools/conformance/extract.py が採取。
 
                 - 一致 (構造が同じか、こちらがより精密): %d
                 - 沈黙 (PHPStan は解けているがこちらは抽象型のまま): %d
@@ -122,17 +132,17 @@ public final class ConformanceSweepTest extends BasePlatformTestCase {
         return type.replace("|", "\\\\|");
     }
 
-    /** the sample project の src / tests を fixture に載せる。 */
-    private Map<String, PsiFile> loadSources() throws IOException {
+    /** 対象プロジェクトの src / tests を fixture に載せる。 */
+    private Map<String, PsiFile> loadSources(Path project) throws IOException {
         Map<String, PsiFile> loaded = new LinkedHashMap<>();
         for (String directory : DIRECTORIES) {
-            Path root = PROJECT.resolve(directory);
+            Path root = project.resolve(directory);
             if (!Files.isDirectory(root)) {
                 continue;
             }
             try (var paths = Files.walk(root)) {
                 for (Path path : paths.filter(p -> p.toString().endsWith(".php")).toList()) {
-                    String relative = PROJECT.relativize(path).toString();
+                    String relative = project.relativize(path).toString();
                     try {
                         loaded.put(relative,
                                 myFixture.addFileToProject(relative, Files.readString(path)));

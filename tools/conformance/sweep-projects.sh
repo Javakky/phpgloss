@@ -1,15 +1,15 @@
 #!/bin/bash
-# projects 配下の PHP プロジェクトを走査し、プロジェクトごとに
+# 指定したディレクトリ直下の PHP プロジェクトを走査し、プロジェクトごとに
 # 「全変数代入の PHPStan 型」と「テストケース候補」を出す。
 #
-#   ./sweep-projects.sh [出力先ディレクトリ]
+#   ./sweep-projects.sh <プロジェクトを並べたディレクトリ> [出力先]
 #
-# 出力はプロジェクトごとに分ける。work / hobby のコンテキストを混ぜないため、
-# 採取結果を別プロジェクトの fixture に流用するときは context を確認すること。
+# 出力はプロジェクトごとに分ける。採った型をそのまま plugin の fixture にしないこと
+# (そのプロジェクトの識別子が公開物に混ざる)。
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"
-projects="$(cd "$here/../../.." && pwd)"
-out="${1:-$here/out}"
+projects="${1:?プロジェクトを並べたディレクトリを指定する}"
+out="${2:-$here/out}"
 mkdir -p "$out"
 
 for dir in "$projects"/*/; do

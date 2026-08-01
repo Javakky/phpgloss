@@ -9,7 +9,7 @@ import com.jetbrains.php.lang.psi.elements.Variable;
 import java.util.Set;
 
 /**
- * 実際のコード (the sample project の `init`) の PHPDoc をそのまま写して測る。
+ * 実際のコードにある入れ子の条件型 の PHPDoc をそのまま写して測る。
  *
  * <p>自分で書いた fixture では通っていたが実物では効いていなかった。差は
  * `@phpstan-param` にも条件型が書かれていること、`@template K of array-key` の境界、

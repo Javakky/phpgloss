@@ -36,9 +36,9 @@ python3 tools/conformance/suggest.py answers.json <プロジェクトルート> 
 tools/conformance/sweep-projects.sh [出力先]
 ```
 
-`projects` 配下で `vendor/bin/phpstan` を持つプロジェクトを順に処理する。
+引数に渡したディレクトリの直下で `vendor/bin/phpstan` を持つプロジェクトを順に処理する。
 出力はプロジェクトごとに分かれる。
 
-**context を混ぜないこと。** work のプロジェクト (例: `a large project`) から採った型を、
-hobby の plugin の fixture にそのまま持ち込まない。機構の確認に他プロジェクトの形が要るときは、
-同じ形を自分で書き起こす。
+**採った型をそのまま fixture にしない。** 業務のコードから採った型を plugin のテストに
+持ち込むと、そのコードの識別子が公開物に混ざる。機構の確認に他プロジェクトの形が要るときは、
+**構文の形だけを自分で書き起こす**。

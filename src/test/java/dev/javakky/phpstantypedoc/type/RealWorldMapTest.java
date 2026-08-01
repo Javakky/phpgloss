@@ -9,7 +9,7 @@ import com.jetbrains.php.lang.psi.elements.Variable;
 import java.util.Set;
 
 /**
- * 実際のコード (the sample project の `map`) の PHPDoc をそのまま写して測る。
+ * 実際のコードにある callable 付きの総称関数 の PHPDoc をそのまま写して測る。
  *
  * <p>`init` との差は、要素型が入力ではなくコールバックの戻り値から決まること。3 段の条件型と
  * `@template K of array-key` の境界はそのまま。

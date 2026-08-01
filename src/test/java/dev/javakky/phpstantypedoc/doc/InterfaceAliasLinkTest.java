@@ -21,14 +21,14 @@ public final class InterfaceAliasLinkTest extends BasePlatformTestCase {
             namespace Probe;
 
             /**
-             * @phpstan-type row_shape array{user_id: positive-int, user_name: string}
+             * @phpstan-type row_shape array{id: positive-int, name: string}
              */
             interface RecordPort
             {
                 /**
                  * @return list<row_shape>
                  */
-                public function getUsers(): array;
+                public function fetchRows(): array;
             }
             """;
 
@@ -42,7 +42,7 @@ public final class InterfaceAliasLinkTest extends BasePlatformTestCase {
 
                 public function run(): void
                 {
-                    $rows = $this->port->getUsers();
+                    $rows = $this->port->fetchRows();
                 }
             }
             """;
