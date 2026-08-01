@@ -94,7 +94,7 @@ final class PhpStanTypeBodyLinkifier {
         PhpIndex index = PhpIndex.getInstance(project);
         if (name.contains("\\")) {
             String fqn = name.startsWith("\\") ? name : "\\" + name;
-            return index.getClassesByFQN(fqn).isEmpty() ? null : fqn;
+            return index.getAnyByFQN(fqn).isEmpty() ? null : fqn;
         }
         Collection<PhpClass> candidates = index.getClassesByName(name);
         if (candidates.isEmpty()) {

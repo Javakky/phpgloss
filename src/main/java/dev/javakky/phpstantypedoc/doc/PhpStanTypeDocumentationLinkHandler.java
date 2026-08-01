@@ -88,7 +88,9 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
     private @Nullable LinkResolveResult resolveClass(PsiElement context, String rawFqn) {
         String fqn = stripArraySuffix(rawFqn);
         PhpIndex index = PhpIndex.getInstance(context.getProject());
-        Collection<PhpClass> classes = index.getClassesByFQN(fqn);
+        // `getClassesByFQN` はクラスしか返さない。インターフェースや trait に書かれたエイリアスへの
+        // リンクが `classes=0` で解決できず死んでいた (実機のログで判明)
+        Collection<PhpClass> classes = index.getAnyByFQN(fqn);
         if (classes.size() == 1) {
             return LinkResolveResult.resolvedTarget(
                     new PhpClassDocumentationTarget(classes.iterator().next(), context));
@@ -166,7 +168,7 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
             return inCurrentFile;
         }
         String normalized = ownerClassFqn.startsWith("\\") ? ownerClassFqn : "\\" + ownerClassFqn;
-        for (PhpClass phpClass : PhpIndex.getInstance(context.getProject()).getClassesByFQN(normalized)) {
+        for (PhpClass phpClass : PhpIndex.getInstance(context.getProject()).getAnyByFQN(normalized)) {
             PsiFile ownerFile = phpClass.getContainingFile();
             if (ownerFile == null) {
                 continue;
@@ -189,7 +191,7 @@ public final class PhpStanTypeDocumentationLinkHandler implements DocumentationL
             String normalized = definingClassFqcn.startsWith("\\")
                     ? definingClassFqcn : "\\" + definingClassFqcn;
             Collection<PhpClass> classes =
-                    PhpIndex.getInstance(context.getProject()).getClassesByFQN(normalized);
+                    PhpIndex.getInstance(context.getProject()).getAnyByFQN(normalized);
             if (classes.size() == 1) {
                 return classes.iterator().next().getContainingFile().getVirtualFile();
             }

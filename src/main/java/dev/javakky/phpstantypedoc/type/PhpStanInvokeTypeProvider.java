@@ -140,7 +140,7 @@ public final class PhpStanInvokeTypeProvider implements PhpTypeProvider4 {
             return null;
         }
         String classFqn = typeString.substring(0, angle);
-        for (PhpClass phpClass : PhpIndex.getInstance(project).getClassesByFQN(classFqn)) {
+        for (PhpClass phpClass : PhpIndex.getInstance(project).getAnyByFQN(classFqn)) {
             Method invoke = phpClass.findMethodByName(INVOKE);
             Map<String, String> bindings = invoke == null
                     ? Map.of()

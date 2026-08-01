@@ -323,7 +323,7 @@ final class CallSiteGenericResolver {
         for (String typeString : receiverType.getTypesWithParametrisedParts()) {
             int angle = typeString.indexOf('<');
             String classFqn = angle < 0 ? typeString : typeString.substring(0, angle);
-            for (PhpClass phpClass : PhpIndex.getInstance(project).getClassesByFQN(classFqn)) {
+            for (PhpClass phpClass : PhpIndex.getInstance(project).getAnyByFQN(classFqn)) {
                 Method method = phpClass.findMethodByName(methodName);
                 if (method == null) {
                     continue;

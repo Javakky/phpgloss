@@ -61,7 +61,7 @@ public final class PhpStanKeywordDefinition {
         }
         PhpIndex index = PhpIndex.getInstance(project);
         for (Source source : SOURCES) {
-            for (PhpClass phpClass : index.getClassesByFQN(source.classFqn())) {
+            for (PhpClass phpClass : index.getAnyByFQN(source.classFqn())) {
                 PsiFile file = phpClass.getContainingFile();
                 VirtualFile virtualFile = file == null ? null : file.getVirtualFile();
                 if (virtualFile == null) {

@@ -11,6 +11,10 @@
 
 
 
+## 0.60.0
+
+- Look up interfaces and traits, not only classes. Every lookup went through `getClassesByFQN`, which returns classes alone, so an alias declared on an interface could be linked but never opened — the log recorded `classes=0` and the click did nothing. Query ports and other interface-declared aliases are the common case for `@phpstan-type`. The same lookup backs imported shapes, generic type arguments and keyword definitions, all of which had the same blind spot.
+
 ## 0.59.0
 
 - Show the alias note when hovering a call, not only its declaration. The note is what carries the alias name — PhpStorm's own `Returns: list<array>` never mentions it — and a call site is where it is usually read.

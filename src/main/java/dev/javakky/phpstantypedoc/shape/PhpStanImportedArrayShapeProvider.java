@@ -114,13 +114,13 @@ public final class PhpStanImportedArrayShapeProvider extends PhpDocArrayShapePro
      * 定義元クラスの `@phpstan-type` タグを返す。同一ファイル内の定義は PHP プラグインが
      * 解決できるので対象から外す。
      *
-     * <p>クラスの取得は {@link PhpIndex#getClassesByFQN} を使う。定義元ファイルを引いてから
+     * <p>クラスの取得は {@link PhpIndex#getAnyByFQN} を使う。定義元ファイルを引いてから
      * PSI を全走査すると、1 打鍵ごとに呼ばれるキー補完では間に合わない。
      */
     private PhpDocTag findAliasTagInAnotherFile(PsiFile currentFile, PhpStanResolvedType resolved) {
         VirtualFile currentVirtualFile = currentFile.getOriginalFile().getVirtualFile();
         String fqn = "\\" + stripLeadingSeparator(resolved.definingClassFqcn());
-        for (PhpClass phpClass : PhpIndex.getInstance(currentFile.getProject()).getClassesByFQN(fqn)) {
+        for (PhpClass phpClass : PhpIndex.getInstance(currentFile.getProject()).getAnyByFQN(fqn)) {
             if (isInFile(phpClass, currentVirtualFile)) {
                 continue;
             }
