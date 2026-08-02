@@ -112,6 +112,10 @@ public final class TypeUnionSimplifier {
      * スカラーの精密化。範囲付き整数 (`int<20, 20>`) と、より狭い型キーワード。
      */
     private static boolean scalarRefines(String sub, String sup) {
+        if (MIXED.equals(sup)) {
+            // `mixed` は何でも含む。型の付いたものは何であれこれより精密
+            return !MIXED.equals(sub) && !UNKNOWN.equals(sub) && !sub.isBlank();
+        }
         return switch (sup) {
             case "int" -> sub.startsWith("int<")
                     || Set.of("positive-int", "non-negative-int", "negative-int",
@@ -158,9 +162,26 @@ public final class TypeUnionSimplifier {
             case UNKNOWN -> true;
             case MIXED -> others.stream().anyMatch(TypeUnionSimplifier::isConcrete);
             case ANY_ARRAY, ITERABLE -> others.stream().anyMatch(other -> arrayShapeOf(other) != null);
-            default -> isSubsumedArray(type, others);
+            default -> isSubsumedArray(type, others) || isCoarserThanASibling(type, others);
         };
+
     }
+
+    /**
+     * 同じ形の、より精密な成分が同じ union にあるか。
+     *
+     * <p>宣言の無い戻り値は、実装の `return` から推論した型が並ぶ。同じ式を複数の経路が
+     * 推論するので、`array<string, mixed>` と `array<string, int|string>` のように、
+     * **同じ構造で粗いだけ**の成分が混ざる (実測)。精密な方が同じ union にいるなら、粗い方は
+     * 読み手に何も足さない。
+     *
+     * <p>構造が違う組 (`list<X>` と `array<int, X>`) は選択肢かもしれないので触らない。
+     */
+    private static boolean isCoarserThanASibling(String type, List<String> others) {
+        return others.stream().anyMatch(other -> !other.equals(type) && refines(other, type));
+    }
+
+
 
     private static boolean isConcrete(String type) {
         return !UNKNOWN.equals(type) && !MIXED.equals(type);

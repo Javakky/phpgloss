@@ -11,6 +11,11 @@
 
 
 
+## 0.82.0
+
+- Drop coarser siblings from an inferred return type. Where no `@return` is written, the type comes from the `return` statements and the same expression gets read more than once, so `array<string, mixed>` sat beside `array<string, int|string>` and `int` beside `int<-1,-1>`. A member that another member in the same union refines is now dropped; members that differ in structure are left alone, since those are real alternatives.
+- Remove the mutation script. It reported zero when a mutation failed to compile, and later the same count for every mechanism — twice it nearly supported the conclusion that nothing was tested. CONTRIBUTING now describes doing it by hand, which takes a minute and cannot lie in that way.
+
 ## 0.81.0
 
 - Keep the key and the value of a `foreach` apart. `getVariables()` returns both, so 0.79.0 gave the key the element type as well — `$name` came out as `non-empty-string|array{…}`. The key now takes the K of `array<K, V>`, and nothing at all where the keys are just an index.
