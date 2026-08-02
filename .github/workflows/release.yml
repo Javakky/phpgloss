@@ -1,0 +1,43 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      # タグを打っただけで壊れたものが出ないよう、リリース前にも一通り確かめる
+      - name: Test and verify
+        run: ./gradlew clean test verifyPlugin buildPlugin
+
+      - name: Read the notes for this version
+        id: notes
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # CHANGELOG から、この版の見出しから次の見出しまでを抜く
+          awk -v v="## $version" '$0 == v {found=1; next} /^## / {found=0} found' CHANGELOG.md > notes.md
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Publish the release
+        uses: softprops/action-gh-release@v2
+        with:
+          body_path: notes.md
+          files: build/distributions/*.zip
+          fail_on_unmatched_files: true
+
+  # Marketplace への公開は手動で行う。初回は審査があり、以後も
+  # 掲載文やスクリーンショットを見てから出したい

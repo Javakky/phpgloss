@@ -11,6 +11,12 @@
 
 
 
+## 0.76.0
+
+- Build and verify on every push and pull request, against all five supported IDEs. Tagging `v<version>` builds, verifies, and attaches the ZIP to a GitHub release with that version's notes.
+- Add issue templates that ask for what a report actually needs: the PHPDoc as written, what the IDE shows, what PHPStan says, and both version numbers.
+- Write CONTRIBUTING.md around the ways this plugin breaks quietly — an index version left unchanged, a reserved character used twice, a resolve requested while indexing, an assumption about PhpStorm that stopped holding. Each has its own test; the document says why.
+
 ## 0.75.0
 
 - Rename to **PHPGloss**. A gloss is the note written beside a word that would otherwise be unreadable — which is what this plugin does to the types in PHPDoc. The old name claimed to be about PHPStan and about documentation; by 0.35 the work had become type inference, and Psalm's syntax is read just as fully.

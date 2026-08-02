@@ -1,0 +1,49 @@
+name: Build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# 同じブランチへの押し直しでは、走っている検証を止めて最新だけを見る
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # プラットフォームと PHP プラグインの JAR は Java 25 のバイトコードで、
+      # 古い JDK では読めない
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 25
+
+      - uses: gradle/actions/setup-gradle@v4
+
+      - name: Test
+        run: ./gradlew clean test
+
+      # 対応すると宣言した IDE のすべてに対して確かめる。
+      # IDE を落としてくるので数分かかる
+      - name: Verify against every supported IDE
+        run: ./gradlew verifyPlugin
+
+      - name: Build
+        run: ./gradlew buildPlugin
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: distribution
+          path: build/distributions/*.zip
+
+      - uses: actions/upload-artifact@v4
+        if: failure()
+        with:
+          name: test-report
+          path: build/reports/tests/test

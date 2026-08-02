@@ -93,6 +93,11 @@ The plugin runs no external process and makes no network request. It does not ru
 - The rendered-doc note and Find Usages rest on experimental platform APIs. They may break on a
   future IDE; the rest of the plugin does not depend on them.
 
+## Contributing
+
+Bug reports and pull requests are welcome. [CONTRIBUTING.md](CONTRIBUTING.md) covers building,
+what a change needs, and the ways this plugin breaks quietly.
+
 ## Development
 
 Java 25 is required — the platform and PHP plugin JARs are Java 25 bytecode, and an older JDK
