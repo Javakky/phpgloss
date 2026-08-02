@@ -29,7 +29,24 @@ public final class TypeTextIntegrityTest extends BasePlatformTestCase {
             "V|null",
             "list<V>|array<string, V>",
             "\\App\\Holder<V>",
-            "array{optional?: int}");
+            "array{optional?: int}",
+            // 修飾の分岐に関わる形を、一度に通す
+            "?V",
+            "V[]",
+            "self",
+            "static",
+            "\\App\\User::class",
+            "int<1, max>",
+            "V&\\Countable",
+            "list<V>&\\Countable",
+            "(V|null)",
+            "iterable<int, V>",
+            "class-string<V>",
+            "array<int, array{a: V}>",
+            "callable(): void",
+            "\\Closure(V): bool",
+            "key-of<array{a: int}>",
+            "value-of<array{a: int}>");
 
     /** 型として読めない形になっていないか。 */
     private void assertWellFormed(String label, String type, List<String> broken) {

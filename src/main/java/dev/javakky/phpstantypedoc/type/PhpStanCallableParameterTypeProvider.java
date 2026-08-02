@@ -29,9 +29,17 @@ import java.util.Set;
  * <p>上界の無い型変数では何も言わない。`mixed` を返しても読み手には何も伝わらないため。
  */
 public final class PhpStanCallableParameterTypeProvider implements PhpTypeProvider4 {
+    /**
+     * この plugin が使う型のキー。他と重ならない 1 文字を選ぶ。
+     *
+     * <p>`ᨭ` は呼び出しの符号化で名前付き引数の区切りに使っており、同じ文字を
+     * キーにすると型の中の区切りとキーが見分けられなくなる。
+     */
+    private static final char KEY = 'ᨯ';
+
     @Override
     public char getKey() {
-        return 'ᨭ';
+        return KEY;
     }
 
     @Override

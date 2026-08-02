@@ -11,6 +11,11 @@
 
 
 
+## 0.72.0
+
+- Give the callable-parameter provider a key of its own. It shared `ᨭ` with the separator that marks a named argument inside an encoded call, so the key and a separator in the middle of a type were the same character. A test now walks the source and fails if any reserved character is used twice — checking that by eye does not last.
+- Check that an encoded call survives the round trip when the argument is a string holding a separator, a brace, a pipe, Japanese text or an emoji. Nothing breaks; PHP lets any of those appear in a literal type.
+
 ## 0.71.0
 
 - Stop qualifying a `callable(...)` type as if it were a class, the same mistake array shapes had. `callable(V): string` came back as `\Probe\callable(int):` — a class that does not exist, with the return type gone.
