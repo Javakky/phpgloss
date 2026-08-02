@@ -90,6 +90,9 @@ The plugin runs no external process and makes no network request. It does not ru
 - `typeAliases` from a PHPStan config file are not read.
 - A type variable with no `of` bound cannot be shown inside the function that declares it. PHPStan
   prints `E (function …)`; the IDE has no way to say that.
+- A shape reached through `foreach` shows as a shape, but a key access on it still resolves to
+  `mixed`. PhpStorm holds shapes in a representation of its own and does not read one back from a
+  type written as text.
 - The rendered-doc note and Find Usages rest on experimental platform APIs. They may break on a
   future IDE; the rest of the plugin does not depend on them.
 

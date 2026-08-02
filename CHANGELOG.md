@@ -11,6 +11,11 @@
 
 
 
+## 0.79.0
+
+- Take the element type of a `foreach` from the type argument of what is being iterated. A `list<array{…}>` gave `mixed|array` for the loop variable, because PhpStorm reaches the element through the plural form (`X[]`) and a shape does not survive that trip. A key access on the element is still `mixed` — noted as a limitation.
+- Test the shapes people actually report: an alias reached through `foreach`, a shape declared without an equals sign, an alias behind `@mixin`, and generics across files. Three already worked; `foreach` did not.
+
 ## 0.78.0
 
 - Loosen the timing thresholds so a shared CI runner does not fail on being slower than a laptop. What holds everywhere is that the second pass over a file is cheap — that stays asserted; the absolute numbers are for reading with `-Dperf.report=true`, and the threshold now only catches something plainly broken.

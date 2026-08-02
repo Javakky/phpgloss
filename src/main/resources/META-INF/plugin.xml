@@ -87,5 +87,6 @@
         <typeProvider4 implementation="io.github.javakky.phpgloss.type.PhpStanCallSiteGenericTypeProvider"/>
         <typeProvider4 implementation="io.github.javakky.phpgloss.type.PhpStanCallableParameterTypeProvider"/>
         <typeProvider4 implementation="io.github.javakky.phpgloss.type.PhpStanArrayLiteralTypeProvider"/>
+        <typeProvider4 implementation="io.github.javakky.phpgloss.type.PhpStanForeachValueTypeProvider"/>
     </extensions>
 </idea-plugin>
