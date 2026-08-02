@@ -2,8 +2,9 @@
 # 機構を 1 つずつ壊し、落ちたテスト数を記録する。
 # 注入はメソッド本体の先頭 (シグネチャを閉じる `{` の直後) に置く。
 set -u
-cd .
-JH=~/.jdks/amazon-corretto-25.jdk/Contents/Home
+cd "$(cd "$(dirname "$0")/../.." && pwd)"
+# JDK 25 の場所。環境変数で渡せる
+JH="${JAVA_HOME:-$HOME/.jdks/amazon-corretto-25.jdk/Contents/Home}"
 out="$1"; : > "$out"
 
 mutate() {
