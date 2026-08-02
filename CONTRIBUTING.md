@@ -77,5 +77,6 @@ Run `./gradlew verifyPlugin` locally first — CI does not gate on it, because i
 IDEs and queries JetBrains for the release listing, which fails often enough on a shared runner to
 be noise. The verify job still runs, but its result does not block.
 
-Tag `v<version>` and push it; the workflow builds, tests, and attaches the ZIP to a GitHub release with the notes from `CHANGELOG.md`. Publishing to the
-JetBrains Marketplace is done by hand — the listing text and screenshots deserve a look each time.
+Tag `v<version>` and push it; the workflow builds, tests, and attaches the ZIP to a GitHub release
+with the notes from `CHANGELOG.md`. Publishing to the JetBrains Marketplace is done by hand — the
+listing text and screenshots deserve a look each time.
