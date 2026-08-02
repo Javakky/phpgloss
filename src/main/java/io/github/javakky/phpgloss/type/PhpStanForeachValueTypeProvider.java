@@ -5,7 +5,6 @@ import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiElement;
 import com.jetbrains.php.lang.psi.elements.ForeachStatement;
 import com.jetbrains.php.lang.psi.elements.PhpNamedElement;
-import com.jetbrains.php.lang.psi.elements.PhpPsiElement;
 import com.jetbrains.php.lang.psi.elements.Variable;
 import com.jetbrains.php.lang.psi.resolve.types.PhpType;
 import com.jetbrains.php.lang.psi.resolve.types.PhpTypeProvider4;
@@ -16,6 +15,8 @@ import java.util.Set;
 
 /**
  * `foreach` で受ける変数の型を、回している式の型引数から取る。
+ *
+ * <p>キーを受ける変数には `array<K, V>` のキー側を与える。
  *
  * <p>`list<array{id: int}>` を回すと、要素は array shape のはず。PhpStorm は要素の型を
  * 複数形 (`X[]`) を通して取るが、shape はその形に載らず `array` まで落ちる (実測: 要素が
@@ -34,7 +35,10 @@ public final class PhpStanForeachValueTypeProvider implements PhpTypeProvider4 {
             // 回している式の型を読むので、索引の構築中には答えられない
             return null;
         }
-        ForeachStatement foreach = foreachReceiving(variable);
+        boolean forKey = variable.getParent() instanceof ForeachStatement keyed
+                && keyed.getKey() == variable;
+        ForeachStatement foreach = forKey
+                ? (ForeachStatement) variable.getParent() : foreachReceiving(variable);
         if (foreach == null
                 || !(foreach.getArray() instanceof com.jetbrains.php.lang.psi.elements.PhpTypedElement iterated)) {
             return null;
@@ -42,7 +46,7 @@ public final class PhpStanForeachValueTypeProvider implements PhpTypeProvider4 {
         PhpType iteratedType = iterated.getType().global(element.getProject());
         PhpType elements = new PhpType();
         for (String member : iteratedType.getTypesWithParametrisedParts()) {
-            String elementType = elementTypeOf(member);
+            String elementType = forKey ? keyTypeOf(member) : elementTypeOf(member);
             if (elementType != null) {
                 elements.add(elementType);
             }
@@ -61,18 +65,29 @@ public final class PhpStanForeachValueTypeProvider implements PhpTypeProvider4 {
         return null;
     }
 
-    /** この変数が値を受けている `foreach`。キーを受ける変数や、無関係な変数では null。 */
+    /**
+     * この変数が**値**を受けている `foreach`。
+     *
+     * <p>`getVariables()` はキーと値の両方を返す。そちらで判定すると `$k => $v` のキーにも
+     * 値の型を与えてしまう (実測: キーが `non-empty-string|array{…}` になった)。
+     */
     private @Nullable ForeachStatement foreachReceiving(Variable variable) {
-        PsiElement parent = variable.getParent();
-        if (!(parent instanceof ForeachStatement foreach)) {
+        return variable.getParent() instanceof ForeachStatement foreach
+                && foreach.getValue() == variable
+                ? foreach : null;
+    }
+
+    /**
+     * `array<K, V>` からキーの型を取る。キーを持たない形 (`list<X>` / `X[]`) では、
+     * 連番の添字になるので何も言わない。
+     */
+    private @Nullable String keyTypeOf(String type) {
+        TypeUnionSimplifier.ArrayShape shape = TypeUnionSimplifier.arrayShapeOf(type);
+        if (shape == null || shape.arguments().size() < 2) {
             return null;
         }
-        for (PhpPsiElement value : foreach.getVariables()) {
-            if (value == variable) {
-                return foreach;
-            }
-        }
-        return null;
+        String key = shape.arguments().getFirst().trim();
+        return key.isEmpty() || key.equals("mixed") ? null : key;
     }
 
     /**

@@ -11,6 +11,10 @@
 
 
 
+## 0.81.0
+
+- Keep the key and the value of a `foreach` apart. `getVariables()` returns both, so 0.79.0 gave the key the element type as well — `$name` came out as `non-empty-string|array{…}`. The key now takes the K of `array<K, V>`, and nothing at all where the keys are just an index.
+
 ## 0.80.0
 
 - Order the README by what people actually ask for. Aliases and generics are where the reports pile up — thirty issues across JetBrains' tracker and the community, against none for the meaning of a type keyword. Keywords move last, and the inference table now leads with generics and `foreach`.
