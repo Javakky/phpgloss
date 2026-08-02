@@ -39,8 +39,8 @@ PY
     cp /tmp/mutant.bak "$file"
 }
 
-T=src/main/java/dev/javakky/phpstantypedoc/type
-P=src/main/java/dev/javakky/phpstantypedoc/parser
+T=src/main/java/io/github/javakky/phpgloss/type
+P=src/main/java/io/github/javakky/phpgloss/parser
 
 mutate "条件型の評価"       "$T/ConditionalReturnType.java" "static @Nullable String resolve(String declared" "if (true) { return null; }"
 mutate "callable の束縛"    "$T/CallableUnification.java" "static void unify(" "if (true) { return; }"

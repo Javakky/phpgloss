@@ -5,4 +5,4 @@ pluginManagement {
     }
 }
 
-rootProject.name = "phpstan-type-documentation"
+rootProject.name = "phpgloss"

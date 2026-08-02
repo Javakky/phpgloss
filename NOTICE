@@ -1,4 +1,4 @@
-PHPStan Type Documentation
+PHPGloss
 Copyright (c) 2026 javakky
 
 This product is licensed under the MIT License. See LICENSE.
@@ -15,17 +15,17 @@ Where a project has its own copy under vendor/, that one is opened instead.
 Psalm — https://github.com/vimeo/psalm — MIT License
   Taken from the 6.x line, unmodified. The exact revision was not recorded; to
   check a file against upstream, compare it with the same path in that repository.
-  src/main/resources/dev/javakky/phpstantypedoc/vendored/psalm-Atomic.php
-  src/main/resources/dev/javakky/phpstantypedoc/vendored/psalm-TIntRange.php
-  src/main/resources/dev/javakky/phpstantypedoc/vendored/psalm-TPropertiesOf.php
-  src/main/resources/dev/javakky/phpstantypedoc/vendored/psalm-TypeParser.php
-  src/main/resources/dev/javakky/phpstantypedoc/vendored/psalm-TypeTokenizer.php
+  src/main/resources/io/github/javakky/phpgloss/vendored/psalm-Atomic.php
+  src/main/resources/io/github/javakky/phpgloss/vendored/psalm-TIntRange.php
+  src/main/resources/io/github/javakky/phpgloss/vendored/psalm-TPropertiesOf.php
+  src/main/resources/io/github/javakky/phpgloss/vendored/psalm-TypeParser.php
+  src/main/resources/io/github/javakky/phpgloss/vendored/psalm-TypeTokenizer.php
   Full licence text: vendored/psalm-LICENSE.txt
 
 PHPStan — https://github.com/phpstan/phpstan-src — MIT License
   Taken from the 2.x line, unmodified. The exact revision was not recorded; to
   check a file against upstream, compare it with the same path in that repository.
-  src/main/resources/dev/javakky/phpstantypedoc/vendored/phpstan-TypeNodeResolver.php
+  src/main/resources/io/github/javakky/phpgloss/vendored/phpstan-TypeNodeResolver.php
   Full licence text: vendored/phpstan-LICENSE.txt
 
 The English wording of the keyword descriptions is quoted from the class

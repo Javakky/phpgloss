@@ -7,7 +7,7 @@ plugins {
 }
 
 group = "dev.javakky"
-version = "0.74.0"
+version = "0.75.0"
 
 // 開発対象とプラグイン検証対象を同じ IDE ビルドに揃える。
 val platformVersion = "2026.2.0.1"
@@ -40,8 +40,8 @@ dependencies {
 
 intellijPlatform {
     pluginConfiguration {
-        id = "dev.javakky.phpstan-type-documentation"
-        name = "PHPStan Type Documentation"
+        id = "io.github.javakky.phpgloss"
+        name = "PHPGloss"
         version = project.version.toString()
 
         ideaVersion {

@@ -1,4 +1,4 @@
-# PHPStan Type Documentation
+# PHPGloss
 
 PhpStorm reads PHPDoc, but not all of it. Type aliases collapse to `array`, conditional return
 types come back as both branches at once, and a type variable that sits inside a type argument is

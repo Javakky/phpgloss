@@ -1,6 +1,6 @@
 <idea-plugin>
-    <id>dev.javakky.phpstan-type-documentation</id>
-    <name>PHPStan Type Documentation</name>
+    <id>io.github.javakky.phpgloss</id>
+    <name>PHPGloss</name>
     <vendor email="dev@javakky.dev">javakky</vendor>
     <description><![CDATA[
         <p>PhpStorm reads PHPDoc, but not all of it. Type aliases collapse to <code>array</code>,
@@ -47,24 +47,24 @@
             <li>Do not read the type of an argument that is itself a call. Reading it resolves that expression, which walks back to the outer call and trips PhpStorm's recursion guard; the failure surfaces as `TypeProvider contract violation`, twenty-two of them while indexing a large project — more than every PHP-plugin provider combined. Nested calls like `array_values(Grouping::by(...))` are where it happens. Variables and literals state their own type, so following them does not come back.</li>
             <li>The two earlier attempts (0.62.0, 0.63.0) narrowed the wrong paths. The condition came from disassembling `PhpTypeInfo`, which wraps whatever a provider throws — the recursion guard was the thrower.</li>
         </ul>
-        <p>Full history: <a href="https://github.com/javakky/phpstan-type-documentation/blob/main/CHANGELOG.md">CHANGELOG.md</a></p>
+        <p>Full history: <a href="https://github.com/javakky/phpgloss/blob/main/CHANGELOG.md">CHANGELOG.md</a></p>
     ]]></change-notes>
 
     <depends>com.intellij.modules.platform</depends>
     <depends>com.jetbrains.php</depends>
 
     <extensions defaultExtensionNs="com.intellij">
-        <fileBasedIndex implementation="dev.javakky.phpstantypedoc.index.PhpStanTypeAliasIndex"/>
-        <gotoDeclarationHandler implementation="dev.javakky.phpstantypedoc.PhpStanTypeGotoDeclarationHandler"/>
-        <lang.inspectionSuppressor language="PHP" implementationClass="dev.javakky.phpstantypedoc.inspection.PhpStanTypeAliasInspectionSuppressor"/>
+        <fileBasedIndex implementation="io.github.javakky.phpgloss.index.PhpStanTypeAliasIndex"/>
+        <gotoDeclarationHandler implementation="io.github.javakky.phpgloss.PhpStanTypeGotoDeclarationHandler"/>
+        <lang.inspectionSuppressor language="PHP" implementationClass="io.github.javakky.phpgloss.inspection.PhpStanTypeAliasInspectionSuppressor"/>
         <!-- 宣言名を Symbol の宣言として見せ、Ctrl+B を使用箇所検索へ切り替える -->
-        <psi.declarationProvider implementation="dev.javakky.phpstantypedoc.usages.PhpStanAliasDeclarationProvider"/>
+        <psi.declarationProvider implementation="io.github.javakky.phpgloss.usages.PhpStanAliasDeclarationProvider"/>
         <searcher forClass="com.intellij.find.usages.api.UsageSearchParameters"
-                  implementationClass="dev.javakky.phpstantypedoc.usages.PhpStanAliasUsageSearcher"/>
-        <platform.backend.documentation.linkHandler implementation="dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationLinkHandler"/>
-        <platform.backend.documentation.targetProvider implementation="dev.javakky.phpstantypedoc.doc.PhpStanTypeDocumentationTargetProvider"/>
+                  implementationClass="io.github.javakky.phpgloss.usages.PhpStanAliasUsageSearcher"/>
+        <platform.backend.documentation.linkHandler implementation="io.github.javakky.phpgloss.doc.PhpStanTypeDocumentationLinkHandler"/>
+        <platform.backend.documentation.targetProvider implementation="io.github.javakky.phpgloss.doc.PhpStanTypeDocumentationTargetProvider"/>
         <!-- リンクの行き先となるクラスの documentation に、そのクラスの型エイリアスを載せる -->
-        <platform.backend.documentation.psiTargetProvider order="first" implementation="dev.javakky.phpstantypedoc.doc.PhpStanClassDocumentationTargetProvider"/>
+        <platform.backend.documentation.psiTargetProvider order="first" implementation="io.github.javakky.phpgloss.doc.PhpStanClassDocumentationTargetProvider"/>
         <!--
             レンダリング表示は 2 つの経路が逆向きに勝敗を決めるため、同じ provider を両端に置く。
 
@@ -75,16 +75,16 @@
 
             片方だけだと、HTML は PHP 標準・リンクだけ自前という食い違った状態になる。
         -->
-        <platform.backend.documentation.inlineDocumentationProvider order="first" implementation="dev.javakky.phpstantypedoc.doc.PhpStanInlineDocumentationProvider"/>
-        <platform.backend.documentation.inlineDocumentationProvider order="last" implementation="dev.javakky.phpstantypedoc.doc.PhpStanInlineDocumentationProvider"/>
+        <platform.backend.documentation.inlineDocumentationProvider order="first" implementation="io.github.javakky.phpgloss.doc.PhpStanInlineDocumentationProvider"/>
+        <platform.backend.documentation.inlineDocumentationProvider order="last" implementation="io.github.javakky.phpgloss.doc.PhpStanInlineDocumentationProvider"/>
     </extensions>
 
     <extensions defaultExtensionNs="com.jetbrains.php">
-        <arrayShapesProvider implementation="dev.javakky.phpstantypedoc.shape.PhpStanImportedArrayShapeProvider"/>
+        <arrayShapesProvider implementation="io.github.javakky.phpgloss.shape.PhpStanImportedArrayShapeProvider"/>
         <!-- ジェネリッククラスの型引数を __invoke の戻り値へ伝播させる (WI-65938 が未解決のため) -->
-        <typeProvider4 implementation="dev.javakky.phpstantypedoc.type.PhpStanInvokeTypeProvider"/>
+        <typeProvider4 implementation="io.github.javakky.phpgloss.type.PhpStanInvokeTypeProvider"/>
         <!-- 呼び出し位置の実引数から型変数を解く (PhpStorm は型引数の中の型変数を残すため) -->
-        <typeProvider4 implementation="dev.javakky.phpstantypedoc.type.PhpStanCallSiteGenericTypeProvider"/>
-        <typeProvider4 implementation="dev.javakky.phpstantypedoc.type.PhpStanCallableParameterTypeProvider"/>
+        <typeProvider4 implementation="io.github.javakky.phpgloss.type.PhpStanCallSiteGenericTypeProvider"/>
+        <typeProvider4 implementation="io.github.javakky.phpgloss.type.PhpStanCallableParameterTypeProvider"/>
     </extensions>
 </idea-plugin>

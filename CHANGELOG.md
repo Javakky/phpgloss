@@ -11,6 +11,11 @@
 
 
 
+## 0.75.0
+
+- Rename to **PHPGloss**. A gloss is the note written beside a word that would otherwise be unreadable — which is what this plugin does to the types in PHPDoc. The old name claimed to be about PHPStan and about documentation; by 0.35 the work had become type inference, and Psalm's syntax is read just as fully.
+- The plugin id moves to `io.github.javakky.phpgloss`, matching where the source lives. Ids cannot change once published, so this is the last chance to set it.
+
 ## 0.74.0
 
 - Fail the build when the author's environment or another project's name appears in the sources. Absolute home paths, task identifiers and the names of projects used during development had all been removed once — and a path came back in a script written afterwards. Guarding this by hand does not hold.
