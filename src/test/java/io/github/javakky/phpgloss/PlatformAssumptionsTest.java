@@ -88,8 +88,13 @@ public final class PlatformAssumptionsTest extends BasePlatformTestCase {
                         .stream().anyMatch(t -> t.contains("<")));
     }
 
-    /** 連番の配列リテラルも `array<int, …>` として持たれ、list とは区別されない。 */
-    public void testSequentialLiteralIsNotSeenAsAList() {
+    /**
+     * 連番の配列リテラルを PhpStorm は `array<int, …>` として持つ。list とは区別しない。
+     *
+     * <p>この plugin が `list<…>` を足すので、両方が union に並ぶ。PhpStorm 側の見方が
+     * 変わったら (`array<int, …>` を出さなくなったら) ここが落ちる。
+     */
+    public void testSequentialLiteralIsHeldAsAnIntKeyedArray() {
         var file = myFixture.configureByText(PhpFileType.INSTANCE, """
                 <?php
                 function probe(): void { $x = [1, 2, 3]; }
@@ -99,6 +104,7 @@ public final class PlatformAssumptionsTest extends BasePlatformTestCase {
         String type = String.join("|", ((PhpTypedElement) variable).getType()
                 .global(getProject()).getTypesWithParametrisedParts());
 
-        assertFalse("連番リテラルが list として持たれるようになった: " + type, type.contains("list<"));
+        assertTrue("PhpStorm が整数キーの配列として持たなくなった: " + type,
+                type.replace(" ", "").replace("\\", "").contains("array<int,"));
     }
 }

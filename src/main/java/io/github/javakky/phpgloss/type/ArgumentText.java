@@ -117,7 +117,10 @@ public final class ArgumentText {
             }
             for (String type : typesOf(typed, project, resolveGlobally)) {
                 // 要素そのものが読めないなら、union に混ぜると全体を粗くしてしまう
-                if (type.isBlank() || type.equals("?") || type.endsWith("mixed")) {
+                // `#㈲…` は PhpStorm がまだ解いていない型の符号。そのまま組み立てると
+                // 内部表現が型として漏れる
+                if (type.isBlank() || type.equals("?") || type.endsWith("mixed")
+                        || type.indexOf('#') >= 0) {
                     return null;
                 }
                 elements.add(type);
@@ -131,7 +134,8 @@ public final class ArgumentText {
             return "list<" + elementType + ">";
         }
         // キーが読めないなら組み立てない。粗い上界で埋めると、実引数から取れる型を上書きしてしまう
-        return keys.isEmpty() || keys.stream().anyMatch(k -> k.isBlank() || k.endsWith("mixed"))
+        return keys.isEmpty()
+                || keys.stream().anyMatch(k -> k.isBlank() || k.endsWith("mixed") || k.indexOf('#') >= 0)
                 ? null
                 : "array<" + String.join("|", keys) + ", " + elementType + ">";
     }

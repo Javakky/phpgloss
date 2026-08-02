@@ -86,5 +86,6 @@
         <!-- 呼び出し位置の実引数から型変数を解く (PhpStorm は型引数の中の型変数を残すため) -->
         <typeProvider4 implementation="io.github.javakky.phpgloss.type.PhpStanCallSiteGenericTypeProvider"/>
         <typeProvider4 implementation="io.github.javakky.phpgloss.type.PhpStanCallableParameterTypeProvider"/>
+        <typeProvider4 implementation="io.github.javakky.phpgloss.type.PhpStanArrayLiteralTypeProvider"/>
     </extensions>
 </idea-plugin>

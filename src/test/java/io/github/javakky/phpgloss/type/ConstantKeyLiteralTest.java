@@ -20,8 +20,8 @@ public final class ConstantKeyLiteralTest extends BasePlatformTestCase {
 
             final class Region
             {
-                public const NORTH = 'ja';
-                public const SOUTH = 'en';
+                public const NORTH = 'north';
+                public const SOUTH = 'south';
             }
 
             /**

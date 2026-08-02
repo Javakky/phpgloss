@@ -11,6 +11,11 @@
 
 
 
+## 0.77.0
+
+- Put the type read from an array literal into the type system, not only into the hover. Keys written as class constants are seen as integers by PhpStorm, so `$table[Region::NORTH]` resolved through that wrong type — fixing the display in 0.56.0 left element access, `??` and everything downstream still wrong.
+- Do not build a type from an element PhpStorm has not resolved yet. Its internal placeholder (`#…`) was being carried straight into the type.
+
 ## 0.76.0
 
 - Build and verify on every push and pull request, against all five supported IDEs. Tagging `v<version>` builds, verifies, and attaches the ZIP to a GitHub release with that version's notes.
