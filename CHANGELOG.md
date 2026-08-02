@@ -11,6 +11,10 @@
 
 
 
+## 0.78.0
+
+- Loosen the timing thresholds so a shared CI runner does not fail on being slower than a laptop. What holds everywhere is that the second pass over a file is cheap — that stays asserted; the absolute numbers are for reading with `-Dperf.report=true`, and the threshold now only catches something plainly broken.
+
 ## 0.77.0
 
 - Put the type read from an array literal into the type system, not only into the hover. Keys written as class constants are seen as integers by PhpStorm, so `$table[Region::NORTH]` resolved through that wrong type — fixing the display in 0.56.0 left element access, `??` and everything downstream still wrong.
