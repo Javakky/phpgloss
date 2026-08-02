@@ -11,6 +11,11 @@
 
 
 
+## 0.74.0
+
+- Fail the build when the author's environment or another project's name appears in the sources. Absolute home paths, task identifiers and the names of projects used during development had all been removed once — and a path came back in a script written afterwards. Guarding this by hand does not hold.
+- Resolve the mutation script's working directory from its own location rather than an absolute path.
+
 ## 0.73.0
 
 - Pin the assumptions this plugin makes about PhpStorm, so a change in the IDE fails a test rather than the feature: that `add` does not split a union, that only one accessor keeps type arguments, that a named argument loses its name, that a closure's shape appears only after global resolution, and that a sequential literal is not held as a list.

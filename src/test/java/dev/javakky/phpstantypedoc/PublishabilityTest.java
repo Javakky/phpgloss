@@ -25,7 +25,13 @@ public final class PublishabilityTest extends TestCase {
             Pattern.compile("C:\\\\Users\\\\"),
             Pattern.compile("the workspace"));
 
-    /** 開発に使った他のプロジェクトの名前。公開物からは読めてはいけない。 */
+    /**
+     * かつて混ざっていた、他のプロジェクト由来の名前。
+     *
+     * <p>この一覧を持つこと自体が、その名前を公開物に残す。それでも列挙するのは、**一度混ざった
+     * ものは再び混ざる**ため — 実際、取り除いた後に書いたスクリプトで作業環境のパスが戻った。
+     * ここに並ぶのは検出のための語であって、この plugin がそれらに依存しているわけではない。
+     */
     private static final List<Pattern> OTHER_PROJECTS = List.of(
             Pattern.compile("(?i)the sample project"),
             Pattern.compile("Example"),
