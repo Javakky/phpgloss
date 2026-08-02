@@ -1,9 +1,8 @@
 # PHPGloss
 
-PhpStorm reads PHPDoc, but not all of it. Type aliases collapse to `array`, conditional return
-types come back as both branches at once, and a type variable that sits inside a type argument is
-never filled in. This plugin resolves those in the IDE, so the type you see matches the type
-PHPStan infers.
+PhpStorm reads PHPDoc, but not all of it. A type alias collapses to `array`, a type variable inside
+a type argument is never filled in, and a conditional return comes back as both branches at once.
+This plugin resolves those in the IDE, so the type you see matches the type PHPStan infers.
 
 ## What it does
 
@@ -34,7 +33,28 @@ interface RecordPort
 }
 ```
 
+### Type inference
+
+PhpStorm resolves a type variable from a call's arguments, but stops short in several places.
+Each of these is resolved here.
+
+| Written | PhpStorm alone | With this plugin |
+|---|---|---|
+| `@return Op<V>` | `Op<#V>` | `Op<\App\User>` |
+| `@param callable(V, K): E` | `E` unresolved | bound from the closure's return type |
+| `foreach` over `list<array{…}>` | `mixed\|array` | the shape |
+| `($mode is Shape::LIST ? list<V> : array<K, V>)` | both branches | the branch the argument selects |
+| `@return V\|null` | `V` alone | the null is kept |
+| `@var list<positive-int>` | flattened to `int` | `positive-int` survives |
+| `$callback($value)` inside the function | no type | the bound of the return type variable |
+| `[Region::NORTH => …]` | integer keys | the constants' own type |
+
+Conditional return types nest, and nesting is followed — real code writes them three deep. A
+branch that the arguments cannot decide is left alone: no type is better than a wrong one.
+
 ### Type keywords
+
+Less often asked for than the two above, but there when you meet an unfamiliar one.
 
 The 84 keywords PHPStan and Psalm reserve — `non-empty-string`, `positive-int`, `class-string`,
 `int-mask-of`, and the rest — carry no meaning in the IDE. Hovering one now explains it, and
@@ -46,24 +66,6 @@ PHPStan's `Type\Accessory\*`), and are shown in Japanese when the IDE is in Japa
 
 Only where a type is actually written. Prose that mentions `list`, and the `as` of an
 `@phpstan-import-type`, are left alone.
-
-### Type inference
-
-PhpStorm resolves a type variable from a call's arguments, but stops short in several places.
-Each of these is resolved here.
-
-| Written | PhpStorm alone | With this plugin |
-|---|---|---|
-| `($mode is Shape::LIST ? list<V> : array<K, V>)` | both branches | the branch the argument selects |
-| `@return Op<V>` | `Op<#V>` | `Op<\App\User>` |
-| `@param callable(V, K): E` | `E` unresolved | bound from the closure's return type |
-| `@return V\|null` | `V` alone | the null is kept |
-| `@var list<positive-int>` | flattened to `int` | `positive-int` survives |
-| `$callback($value)` inside the function | no type | the bound of the return type variable |
-| `[Region::NORTH => …]` | integer keys | the constants' own type |
-
-Conditional return types nest, and nesting is followed — real code writes them three deep. A
-branch that the arguments cannot decide is left alone: no type is better than a wrong one.
 
 ## Install
 

@@ -11,6 +11,10 @@
 
 
 
+## 0.80.0
+
+- Order the README by what people actually ask for. Aliases and generics are where the reports pile up — thirty issues across JetBrains' tracker and the community, against none for the meaning of a type keyword. Keywords move last, and the inference table now leads with generics and `foreach`.
+
 ## 0.79.0
 
 - Take the element type of a `foreach` from the type argument of what is being iterated. A `list<array{…}>` gave `mixed|array` for the loop variable, because PhpStorm reaches the element through the plural form (`X[]`) and a shape does not survive that trip. A key access on the element is still `mixed` — noted as a limitation.
