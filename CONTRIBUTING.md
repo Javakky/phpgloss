@@ -73,6 +73,9 @@ Conventional Commits. The subject line says what changed and why, not which file
 
 ## Releasing
 
-Tag `v<version>` and push it; the workflow builds, verifies against every supported IDE, and
-attaches the ZIP to a GitHub release with the notes from `CHANGELOG.md`. Publishing to the
+Run `./gradlew verifyPlugin` locally first — CI does not gate on it, because it downloads several
+IDEs and queries JetBrains for the release listing, which fails often enough on a shared runner to
+be noise. The verify job still runs, but its result does not block.
+
+Tag `v<version>` and push it; the workflow builds, tests, and attaches the ZIP to a GitHub release with the notes from `CHANGELOG.md`. Publishing to the
 JetBrains Marketplace is done by hand — the listing text and screenshots deserve a look each time.

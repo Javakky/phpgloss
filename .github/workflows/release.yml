@@ -21,8 +21,10 @@ jobs:
       - uses: gradle/actions/setup-gradle@v4
 
       # タグを打っただけで壊れたものが出ないよう、リリース前にも一通り確かめる
-      - name: Test and verify
-        run: ./gradlew clean test verifyPlugin buildPlugin
+      # verifyPlugin は外部への問い合わせに依存するのでここには入れない。
+      # リリース前にローカルで通しておく (CONTRIBUTING.md)
+      - name: Test and build
+        run: ./gradlew clean test buildPlugin --no-configuration-cache
 
       - name: Read the notes for this version
         id: notes
