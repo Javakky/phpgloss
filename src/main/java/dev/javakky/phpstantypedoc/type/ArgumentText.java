@@ -99,8 +99,7 @@ public final class ArgumentText {
         Set<String> elements = new LinkedHashSet<>();
         Set<String> keys = new LinkedHashSet<>();
         boolean keyed = false;
-        // `getChildren()` は配列リテラルの要素を返さない (実測で空)。兄弟を辿る
-        for (PsiElement child = literal.getFirstChild(); child != null; child = child.getNextSibling()) {
+        for (PsiElement child : literal.getChildren()) {
             PsiElement element = child;
             if (child instanceof ArrayHashElement hash) {
                 keyed = true;

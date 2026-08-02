@@ -11,6 +11,11 @@
 
 
 
+## 0.73.0
+
+- Pin the assumptions this plugin makes about PhpStorm, so a change in the IDE fails a test rather than the feature: that `add` does not split a union, that only one accessor keeps type arguments, that a named argument loses its name, that a closure's shape appears only after global resolution, and that a sequential literal is not held as a list.
+- Read an array literal's elements through `getChildren()` again. A comment claimed it returns nothing — that observation came from looking at an empty `[]`, and the walk over siblings written around it was never needed.
+
 ## 0.72.0
 
 - Give the callable-parameter provider a key of its own. It shared `ᨭ` with the separator that marks a named argument inside an encoded call, so the key and a separator in the middle of a type were the same character. A test now walks the source and fails if any reserved character is used twice — checking that by eye does not last.
