@@ -113,7 +113,10 @@ public final class PhpStanInlineDocumentationProvider implements InlineDocumenta
         @Override
         public @Nullable String renderText() {
             String html = baseHtml();
-            String result = html == null ? null : annotate.apply(html);
+            // PHP が色を付けただけのキーワードはリンクになっていない。エイリアス名を差し込んだ
+            // あとで、残りのキーワードにもリンクを足す
+            String result = html == null ? null
+                    : PhpDocKeywordLinker.linkBareKeywords(annotate.apply(html));
             // 罫線モードの描画結果は MCP から取得できない。実機で何が出ているかを追うため記録する。
             LOG.warn("PHPStan rendered doc: owner=" + owner.getName()
                     + " kind=" + owner.getClass().getSimpleName()

@@ -175,6 +175,10 @@ public final class TypeKeywordLinkTest extends BasePlatformTestCase {
     }
 
     private String documentationHtml(String source) {
+        return documentationHtml(source, "Payload");
+    }
+
+    private String documentationHtml(String source, String caretWord) {
         myFixture.addFileToProject("Account.php", """
                 <?php
                 namespace App\\Domain;
@@ -182,10 +186,62 @@ public final class TypeKeywordLinkTest extends BasePlatformTestCase {
                 final class Account {}
                 """);
         var file = myFixture.configureByText(PhpFileType.INSTANCE, source);
-        int offset = file.getText().lastIndexOf("Payload");
+        int offset = file.getText().lastIndexOf(caretWord);
         return new PhpStanTypeDocumentationTargetProvider()
                 .documentationTargets(file, offset).getFirst()
                 .computeDocumentation()
                 .toString();
+    }
+
+    /**
+     * 型引数の中のキーワード。`@param list<positive-int> $ids` の `positive-int`。
+     *
+     * <p>外側の `list` と、`@phpstan-type` の本体に書いた `positive-int` は既に見ている。
+     * 実際の宣言でリンクにならないと言われたのはこの形。
+     */
+    private static final String IN_TYPE_ARGUMENT = """
+            <?php
+            namespace Probe;
+
+            /**
+             * @phpstan-type user_record array{
+             *     user_id: positive-int,
+             * }
+             */
+            interface RecordPort
+            {
+                /**
+                 * @param list<positive-int> $user_id_list
+                 * @return list<user_record>
+                 */
+                public function getUsers(array $user_id_list): array;
+            }
+            """;
+
+    public void testLinksAKeywordInsideATypeArgument() {
+        String html = documentationHtml(IN_TYPE_ARGUMENT, "user_record");
+
+        assertTrue("型引数の中の positive-int がリンクになっていない: " + html,
+                html.contains("psi_element://phpstan-type-keyword/positive-int"));
+    }
+
+    public void testGoToDeclarationInsideATypeArgument() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, IN_TYPE_ARGUMENT);
+        int offset = file.getText().indexOf("list<positive-int>") + "list<positive-".length();
+
+        var targets = new io.github.javakky.phpgloss.PhpStanTypeGotoDeclarationHandler()
+                .getGotoDeclarationTargets(file.findElementAt(offset), offset, null);
+
+        assertNotNull("型引数の中のキーワードから移動できない", targets);
+        assertTrue("移動先が空", targets.length > 0);
+    }
+
+    public void testShowsDocumentationInsideATypeArgument() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, IN_TYPE_ARGUMENT);
+        int offset = file.getText().indexOf("list<positive-int>") + "list<positive-".length();
+
+        var targets = new PhpStanTypeDocumentationTargetProvider().documentationTargets(file, offset);
+
+        assertFalse("型引数の中のキーワードで説明が出ない", targets.isEmpty());
     }
 }

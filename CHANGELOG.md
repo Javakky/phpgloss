@@ -11,6 +11,10 @@
 
 
 
+## 0.93.0
+
+- Keywords are links in the rendered PHPDoc shown inside the editor, not only in Quick Documentation. `@param list<positive-int> $ids` used to render `positive-int` as plain coloured text with nowhere to click. Shape keys that happen to spell a keyword (`array{list: int}`) are still left alone.
+
 ## 0.92.0
 
 - Indexing no longer freezes the IDE. The expressions that find `namespace` and `use` at the start of a line used `\\s*`, which crosses newlines: on a miss it ate into the next line and started over one character along. Masking string literals (0.90.0) left long runs of spaces for it to chew on, and one file could take over thirty seconds — with the whole IDE waiting on it.

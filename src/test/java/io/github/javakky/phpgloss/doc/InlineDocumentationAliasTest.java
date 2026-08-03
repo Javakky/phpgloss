@@ -117,9 +117,13 @@ public final class InlineDocumentationAliasTest extends BasePlatformTestCase {
     }
 
     private PhpDocComment methodDocComment(com.intellij.psi.PsiFile file) {
+        return methodDocComment(file, "@param CreateUserData");
+    }
+
+    private PhpDocComment methodDocComment(com.intellij.psi.PsiFile file, String marker) {
         PhpDocComment found = null;
         for (PhpDocComment comment : PsiTreeUtil.findChildrenOfType(file, PhpDocComment.class)) {
-            if (comment.getText().contains("@param CreateUserData")) {
+            if (comment.getText().contains(marker)) {
                 found = comment;
             }
         }
@@ -135,5 +139,72 @@ public final class InlineDocumentationAliasTest extends BasePlatformTestCase {
             offset += needle.length();
         }
         return count;
+    }
+
+    /**
+     * レンダリング表示の `@param list<positive-int> $ids` で、キーワードがリンクになる。
+     *
+     * <p>実際の宣言を見て「ここが clickable じゃない」と言われた形。エイリアス名は既にリンクに
+     * しているが、型引数の中のキーワードは別の話。
+     */
+    public void testRenderedDocLinksKeywordsInsideTypeArguments() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, """
+                <?php
+                namespace Probe;
+
+                /**
+                 * @phpstan-type user_record array{user_id: positive-int}
+                 */
+                interface RecordPort
+                {
+                    /**
+                     * @param list<positive-int> $user_id_list
+                     *
+                     * @return list<user_record>
+                     */
+                    public function getUsers(array $user_id_list): array;
+                }
+                """);
+        var comment = methodDocComment(file, "@param list<positive-int>");
+
+        var documentation = new PhpStanInlineDocumentationProvider()
+                .findInlineDocumentation(file, comment.getTextRange());
+
+        assertNotNull("レンダリング表示の documentation が返らない", documentation);
+        String html = documentation.renderText();
+        assertTrue("型引数の中の positive-int がリンクになっていない: " + html,
+                html.contains("phpstan-type-keyword/positive-int"));
+    }
+
+    /** レンダリング表示でも、shape のキー名はキーワードと同じ綴りでもリンクにしない。 */
+    public void testRenderedDocLeavesShapeKeysAlone() {
+        var file = myFixture.configureByText(PhpFileType.INSTANCE, """
+                <?php
+                namespace Probe;
+
+                /**
+                 * @phpstan-type holder array{list: int, string: non-empty-string}
+                 */
+                interface KeyPort
+                {
+                    /**
+                     * @param holder $held
+                     *
+                     * @return holder
+                     */
+                    public function pass(array $held): array;
+                }
+                """);
+        var comment = methodDocComment(file, "@param holder");
+
+        var documentation = new PhpStanInlineDocumentationProvider()
+                .findInlineDocumentation(file, comment.getTextRange());
+
+        assertNotNull("レンダリング表示の documentation が返らない", documentation);
+        String html = documentation.renderText();
+        assertFalse("キー名をキーワードとしてリンクにしている: " + html,
+                html.contains("phpstan-type-keyword/list"));
+        assertFalse("キー名をキーワードとしてリンクにしている: " + html,
+                html.contains("phpstan-type-keyword/string"));
     }
 }
