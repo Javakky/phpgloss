@@ -11,6 +11,11 @@
 
 
 
+## 0.85.0
+
+- Expand an alias written on a property. `@var list<row>` on a field was `array` to PhpStorm; only method return types were being read. Promoted constructor properties are read too, where the type sits on the constructor's `@param` rather than on the property.
+- Resolve the property through `complete` rather than in `getType`. Resolving a reference while the index is being built stops the stub tree from being assembled — the same mistake the call-site resolver made earlier, in a new place.
+
 ## 0.84.0
 
 - Resolve an index access from the type argument of what is being indexed. `$rows->all()[0]` gave `mixed|array` for the same reason `foreach` did: PhpStorm reaches the element through the plural form, and a shape does not survive it.

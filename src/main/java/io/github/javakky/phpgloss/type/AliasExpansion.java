@@ -3,6 +3,7 @@ package io.github.javakky.phpgloss.type;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiFile;
 import com.jetbrains.php.lang.documentation.phpdoc.psi.PhpDocComment;
+import com.jetbrains.php.lang.psi.elements.Field;
 import com.jetbrains.php.lang.psi.elements.Method;
 import com.jetbrains.php.lang.psi.elements.MethodReference;
 import com.jetbrains.php.lang.psi.elements.PhpClass;
@@ -140,6 +141,41 @@ final class AliasExpansion {
 
     private static boolean isNamePart(char c) {
         return Character.isLetterOrDigit(c) || c == '_';
+    }
+
+    /**
+     * プロパティに `@var` で書かれた型を、エイリアスを開いた形で返す。
+     *
+     * <p>メソッドの戻り値と同じ扱いが要る。エイリアスは宣言したクラスの中では import なしで
+     * 使えるので、そのクラスで引き直す。
+     */
+    static @Nullable PhpType fieldTypeOf(Field field) {
+        PhpClass owner = field.getContainingClass();
+        if (owner == null) {
+            return null;
+        }
+        String declared = PhpDocDeclaredTypeReader.unionTypeFor(
+                field.getDocComment(), PhpDocDeclaredTypeReader.VAR_TAGS, null);
+        if (declared == null) {
+            // 昇格プロパティ (`__construct(public array $rows)`) は、型がプロパティ自身では
+            // なくコンストラクタの `@param` に書かれる
+            Method constructor = owner.getConstructor();
+            declared = constructor == null ? null : PhpDocDeclaredTypeReader.unionTypeFor(
+                    constructor.getDocComment(), PhpDocDeclaredTypeReader.PARAM_TAGS,
+                    field.getName());
+        }
+        if (declared == null) {
+            return null;
+        }
+        String expanded = expand(declared, owner);
+        if (expanded == null || expanded.equals(declared)) {
+            return null;
+        }
+        PhpType type = new PhpType();
+        for (String part : PhpTypeText.splitTopLevelUnion(expanded)) {
+            type.add(part);
+        }
+        return type.isEmpty() ? null : type;
     }
 
     /** `@return` に書かれたままの型。 */
