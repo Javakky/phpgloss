@@ -97,4 +97,76 @@ public class PhpDocAliasParserTest {
         assertEquals("B", doc.aliases().get(0).typeExpression());
         assertEquals("A", doc.aliases().get(1).typeExpression());
     }
+
+    /** Psalm の書き方でも同じエイリアスが読める。 */
+    @Test
+    public void parsesPsalmFlavouredTags() {
+        ParsedPhpDoc parsed = parser.parse("""
+                /**
+                 * @psalm-type user_row = array{id: int, name: string}
+                 * @psalm-import-type other_row from \\Vendor\\Port
+                 */
+                """);
+
+        assertEquals(1, parsed.aliases().size());
+        assertEquals("user_row", parsed.aliases().get(0).aliasName());
+        assertEquals("array{id: int, name: string}", parsed.aliases().get(0).typeExpression());
+        assertEquals(1, parsed.imports().size());
+        assertEquals("other_row", parsed.imports().get(0).originalName());
+    }
+
+    /** PHPStan の書き方でも `=` を挟める。 */
+    @Test
+    public void parsesAnEqualsSignBetweenNameAndType() {
+        ParsedPhpDoc parsed = parser.parse(
+                "/** @phpstan-type row = array{id: int} */");
+
+        assertEquals(1, parsed.aliases().size());
+        assertEquals("array{id: int}", parsed.aliases().get(0).typeExpression());
+    }
+
+    /** 入れ子の総称型が深さで閉じる。 */
+    @Test
+    public void parsesNestedGenerics() {
+        ParsedPhpDoc parsed = parser.parse(
+                "/** @phpstan-type nested array<string, array<int, list<array{id: int}>>> */");
+
+        assertEquals("array<string, array<int, list<array{id: int}>>>",
+                parsed.aliases().get(0).typeExpression());
+    }
+
+    /** 条件付き型の中の `?` と `:` で切れない。 */
+    @Test
+    public void parsesAConditionalType() {
+        ParsedPhpDoc parsed = parser.parse(
+                "/** @phpstan-type picked ($mode is true ? list<int> : array<string, int>) */");
+
+        assertEquals("($mode is true ? list<int> : array<string, int>)",
+                parsed.aliases().get(0).typeExpression());
+    }
+
+    /** 改行が CRLF でも読める。 */
+    @Test
+    public void parsesWithCarriageReturns() {
+        ParsedPhpDoc parsed = parser.parse(
+                "/**\r\n * @phpstan-type row array{id: int}\r\n */");
+
+        assertEquals(1, parsed.aliases().size());
+        assertEquals("array{id: int}", parsed.aliases().get(0).typeExpression());
+    }
+
+    /** Psalm の綴りで、別名まで付けて持ち込む。 */
+    @Test
+    public void parsesPsalmImportWithAnAlias() {
+        ParsedPhpDoc parsed = parser.parse("""
+                /**
+                 * @psalm-import-type user_row from Port as brought
+                 */
+                """);
+
+        assertEquals(1, parsed.imports().size());
+        assertEquals("user_row", parsed.imports().get(0).originalName());
+        assertEquals("Port", parsed.imports().get(0).sourceClassText());
+        assertEquals("brought", parsed.imports().get(0).localName());
+    }
 }

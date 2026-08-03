@@ -171,6 +171,98 @@ public final class PhpFileModelParserTest extends TestCase {
         assertNull("別の namespace の use が混ざっている", second.get("Early"));
     }
 
+    /** 属性が PHPDoc より上に書かれていても読める。 */
+    public void testReadsWithAnAttributeAboveTheDoc() {
+        PhpFileModel model = parser.parse("""
+                <?php
+                namespace Probe;
+
+                #[\\Attribute]
+                /**
+                 * @phpstan-type above array{id: int}
+                 */
+                final class Above {}
+                """);
+
+        assertEquals("属性が上にあると宣言の PHPDoc が読めない",
+                List.of("above"), aliasNamesOf(model, "Probe\\Above"));
+    }
+
+    /** 文字列の中に書かれた namespace は宣言ではない。 */
+    public void testIgnoresANamespaceInsideAString() {
+        PhpFileModel model = parser.parse("""
+                <?php
+                namespace Real;
+
+                final class Emitter
+                {
+                    public function render(): string
+                    {
+                        return "namespace Fake;";
+                    }
+                }
+
+                /**
+                 * @phpstan-type shape array{id: int}
+                 */
+                final class Holder {}
+                """);
+
+        assertEquals("文字列の中の namespace を宣言として読んでいる",
+                List.of("shape"), aliasNamesOf(model, "Real\\Holder"));
+    }
+
+    /** コメントアウトされた use は効かない。 */
+    public void testIgnoresACommentedOutUse() {
+        PhpFileModel model = parser.parse("""
+                <?php
+                namespace Probe;
+
+                // use Wrong\\Target;
+                # use AlsoWrong\\Target;
+                use Right\\Target;
+
+                /**
+                 * @phpstan-type held array{x: int}
+                 */
+                final class Holder {}
+                """);
+
+        assertEquals("コメントアウトされた use を読んでいる",
+                "Right\\Target", model.classLikeDocBlocks().get(0).uses().get("Target"));
+    }
+
+    /** ヒアドキュメントの中のクラス宣言は宣言ではない。 */
+    public void testIgnoresADeclarationInsideAHeredoc() {
+        PhpFileModel model = parser.parse("""
+                <?php
+                namespace Probe;
+
+                final class Template
+                {
+                    public function emit(): string
+                    {
+                        return <<<PHP
+                        /**
+                         * @phpstan-type fake array{no: int}
+                         */
+                        final class Generated {}
+                        PHP;
+                    }
+                }
+
+                /**
+                 * @phpstan-type real array{yes: int}
+                 */
+                final class Holder {}
+                """);
+
+        assertTrue("ヒアドキュメントの中の宣言を読んでいる",
+                aliasNamesOf(model, "Probe\\Generated").isEmpty());
+        assertEquals("ヒアドキュメントの後ろの宣言が読めない",
+                List.of("real"), aliasNamesOf(model, "Probe\\Holder"));
+    }
+
     /** 属性を挟んでも宣言の PHPDoc は読める。 */
     public void testReadsThroughAnAttribute() {
         PhpFileModel model = parser.parse("""

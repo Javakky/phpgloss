@@ -15,9 +15,10 @@ import java.util.List;
  * {@code getType()} は解決済みの型を返すのでエイリアス名が失われる。
  */
 public final class PhpDocDeclaredTypeReader {
-    public static final List<String> PARAM_TAGS = List.of("@phpstan-param", "@param");
-    public static final List<String> RETURN_TAGS = List.of("@phpstan-return", "@return");
-    public static final List<String> VAR_TAGS = List.of("@phpstan-var", "@var");
+    // 並び順が優先順。PHPStan 自身も、同じことを三通りに書けるときは細かい方を採る
+    public static final List<String> PARAM_TAGS = List.of("@phpstan-param", "@psalm-param", "@param");
+    public static final List<String> RETURN_TAGS = List.of("@phpstan-return", "@psalm-return", "@return");
+    public static final List<String> VAR_TAGS = List.of("@phpstan-var", "@psalm-var", "@var");
 
     private PhpDocDeclaredTypeReader() {
     }

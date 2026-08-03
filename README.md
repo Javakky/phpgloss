@@ -9,7 +9,8 @@ This plugin resolves those in the IDE, so the type you see matches the type PHPS
 ### Type aliases
 
 `@phpstan-type` and `@phpstan-import-type` declare a name for a shape. PhpStorm parses them but
-does not carry the shape through.
+does not carry the shape through. The `@psalm-` spellings of every tag this plugin reads are
+treated the same, with or without the `=` Psalm allows between the name and the type.
 
 | | PhpStorm alone | With this plugin |
 |---|---|---|
@@ -85,8 +86,8 @@ The plugin runs no external process and makes no network request. It does not ru
 
 ## Known limitations
 
-- Type references are read in `@param`, `@return`, `@var` and their `@phpstan-` forms. Other tags
-  are not scanned.
+- Type references are read in `@param`, `@return`, `@var` and their `@phpstan-` and `@psalm-`
+  forms. Other tags are not scanned.
 - Aliases are read from class, interface, trait and enum PHPDoc. Method, function and file-level
   aliases are not supported, and inherited aliases are not resolved implicitly.
 - `typeAliases` from a PHPStan config file are not read.

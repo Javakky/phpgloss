@@ -8,6 +8,10 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class PhpDocAliasParser {
+    /** 同じことを二通りに書ける。どちらで書かれていても同じエイリアスとして読む。 */
+    private static final List<String> TYPE_TAGS = List.of("@phpstan-type", "@psalm-type");
+    private static final List<String> IMPORT_TAGS = List.of("@phpstan-import-type", "@psalm-import-type");
+
     public ParsedPhpDoc parse(String rawPhpDoc, int baseOffset, String containingClassFqcn) {
         try {
             NormalizedDoc normalized = normalize(rawPhpDoc, baseOffset);
@@ -16,20 +20,22 @@ public final class PhpDocAliasParser {
             String text = normalized.text();
             int offset = 0;
             while (offset < text.length()) {
-                int tag = text.indexOf("@phpstan-", offset);
+                int tag = text.indexOf('@', offset);
                 if (tag < 0) {
                     break;
                 }
-                if (PhpStanDocUtil.startsWithWord(text, tag, "@phpstan-type")) {
-                    AliasParseResult result = parseAlias(normalized, tag, containingClassFqcn);
-                    if (result.alias() != null) {
-                        aliases.add(result.alias());
-                    }
-                    offset = Math.max(tag + 1, result.nextOffset());
-                } else if (PhpStanDocUtil.startsWithWord(text, tag, "@phpstan-import-type")) {
-                    ImportParseResult result = parseImport(normalized, tag);
+                String importTag = tagAt(text, tag, IMPORT_TAGS);
+                String typeTag = tagAt(text, tag, TYPE_TAGS);
+                if (importTag != null) {
+                    ImportParseResult result = parseImport(normalized, tag, importTag);
                     if (result.typeImport() != null) {
                         imports.add(result.typeImport());
+                    }
+                    offset = Math.max(tag + 1, result.nextOffset());
+                } else if (typeTag != null) {
+                    AliasParseResult result = parseAlias(normalized, tag, typeTag, containingClassFqcn);
+                    if (result.alias() != null) {
+                        aliases.add(result.alias());
                     }
                     offset = Math.max(tag + 1, result.nextOffset());
                 } else {
@@ -46,9 +52,19 @@ public final class PhpDocAliasParser {
         return parse(rawPhpDoc, 0, null);
     }
 
-    private AliasParseResult parseAlias(NormalizedDoc doc, int tagStart, String containingClassFqcn) {
+    /** その位置に書かれているタグ。書き方が二通りあるので、どれで書かれたかを返す。 */
+    private String tagAt(String text, int offset, List<String> candidates) {
+        for (String candidate : candidates) {
+            if (PhpStanDocUtil.startsWithWord(text, offset, candidate)) {
+                return candidate;
+            }
+        }
+        return null;
+    }
+
+    private AliasParseResult parseAlias(NormalizedDoc doc, int tagStart, String tag, String containingClassFqcn) {
         String text = doc.text();
-        int cursor = skipHorizontalWhitespace(text, tagStart + "@phpstan-type".length());
+        int cursor = skipHorizontalWhitespace(text, tagStart + tag.length());
         int nameStart = cursor;
         if (nameStart >= text.length() || !PhpStanDocUtil.isIdentifierStart(text.charAt(nameStart))) {
             return new AliasParseResult(null, tagStart + 1);
@@ -59,7 +75,11 @@ public final class PhpDocAliasParser {
         }
         int nameEnd = cursor;
         String name = text.substring(nameStart, nameEnd);
+        // Psalm は名前と型を `=` で結ぶ。PHPStan は並べるだけで、どちらの書き方も見かける
         int typeStart = skipHorizontalWhitespace(text, cursor);
+        if (typeStart < text.length() && text.charAt(typeStart) == '=') {
+            typeStart = skipHorizontalWhitespace(text, typeStart + 1);
+        }
         int declarationEnd = findDeclarationEnd(text, typeStart);
         String typeExpression = trimTrailingLineWhitespace(text.substring(typeStart, declarationEnd));
         int typeEnd = typeStart + typeExpression.length();
@@ -77,9 +97,9 @@ public final class PhpDocAliasParser {
         return new AliasParseResult(alias, declarationEnd);
     }
 
-    private ImportParseResult parseImport(NormalizedDoc doc, int tagStart) {
+    private ImportParseResult parseImport(NormalizedDoc doc, int tagStart, String tag) {
         String text = doc.text();
-        int cursor = skipHorizontalWhitespace(text, tagStart + "@phpstan-import-type".length());
+        int cursor = skipHorizontalWhitespace(text, tagStart + tag.length());
         int originalStart = cursor;
         if (originalStart >= text.length() || !PhpStanDocUtil.isIdentifierStart(text.charAt(originalStart))) {
             return new ImportParseResult(null, tagStart + 1);

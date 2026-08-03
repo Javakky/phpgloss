@@ -128,9 +128,13 @@ public final class PhpStanImportedArrayShapeProvider extends PhpDocArrayShapePro
             if (doc == null) {
                 continue;
             }
-            for (PhpDocTag tag : doc.getTagElementsByName("@phpstan-type")) {
-                if (declaresAlias(tag, resolved.originalName())) {
-                    return tag;
+            // 同じ宣言を `@psalm-type` と書く人もいる。索引はどちらでも拾うので、ここで
+            // 片方しか見ないと、索引に載っているのに shape が出ないという食い違いになる
+            for (String tagName : List.of("@phpstan-type", "@psalm-type")) {
+                for (PhpDocTag tag : doc.getTagElementsByName(tagName)) {
+                    if (declaresAlias(tag, resolved.originalName())) {
+                        return tag;
+                    }
                 }
             }
         }

@@ -23,7 +23,8 @@ import java.util.Map;
 
 public final class PhpStanTypeAliasIndex extends FileBasedIndexExtension<String, PhpStanTypeAliasIndexValue> {
     public static final ID<String, PhpStanTypeAliasIndexValue> NAME = ID.create("io.github.javakky.phpgloss.alias");
-    public static final int VERSION = 1;
+    // パーサが読む範囲を変えたら上げる。上げないと、入れ替えても古い索引がそのまま使われる
+    public static final int VERSION = 2;
 
     private static final PhpFileModelParser FILE_PARSER = new PhpFileModelParser();
     private static final DataExternalizer<PhpStanTypeAliasIndexValue> VALUE_EXTERNALIZER = new DataExternalizer<>() {

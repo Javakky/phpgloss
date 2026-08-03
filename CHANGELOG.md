@@ -11,6 +11,12 @@
 
 
 
+## 0.90.0
+
+- The `@psalm-` spelling of every tag is read: `@psalm-type`, `@psalm-import-type`, `@psalm-param`, `@psalm-return`, `@psalm-var`. A project written against Psalm got nothing from this plugin before.
+- `@psalm-type row = array{...}` is accepted. The `=` used to be read as part of the type.
+- A declaration written inside a heredoc is no longer indexed. Code that builds PHP source and returns it as a string registered aliases for classes that do not exist.
+
 ## 0.89.0
 
 - A file with more than one `namespace` places each declaration in the one it was written under. Everything below the second `namespace` used to be given the first one's name, so its aliases were filed under a class that does not exist.

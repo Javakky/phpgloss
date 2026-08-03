@@ -14,6 +14,8 @@ public final class PhpFileModelParser {
     private static final Pattern NAMESPACE_PATTERN = Pattern.compile("(?m)^\\s*namespace\\s+([^;{]+)\\s*[;{]");
     private static final Pattern USE_PATTERN = Pattern.compile("(?m)^\\s*use\\s+([^;]+);");
     private static final Pattern GROUP_USE_PATTERN = Pattern.compile("(?s)^(.+?)\\\\\\{(.*)\\}$");
+    private static final Pattern HEREDOC_OPENING =
+            Pattern.compile("<<<[ \\t]*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?[ \\t]*\\r?\\n");
     private static final Pattern AS_PATTERN =
             Pattern.compile("^(.+?)\\s+as\\s+([A-Za-z_][A-Za-z0-9_]*)$", Pattern.CASE_INSENSITIVE);
     /**
@@ -31,7 +33,8 @@ public final class PhpFileModelParser {
 
     private final PhpDocAliasParser docParser = new PhpDocAliasParser();
 
-    public PhpFileModel parse(String text) {
+    public PhpFileModel parse(String source) {
+        String text = maskLiterals(source);
         List<Declared> namespaces = parseNamespaces(text);
         List<Declared> imports = parseUses(text);
         String namespace = namespaces.isEmpty() ? null : namespaces.get(0).value();
@@ -62,6 +65,79 @@ public final class PhpFileModelParser {
             ));
         }
         return new PhpFileModel(namespace, uses, List.copyOf(blocks));
+    }
+
+    /**
+     * 文字列とコメントを、同じ長さの空白に置き換える。
+     *
+     * <p>ここから先はファイルを正規表現で読む。コードを組み立てて返す関数のヒアドキュメントには
+     * クラス宣言がそのまま入っていることがあり、伏せずに読むと、書かれていないクラスのエイリアスを
+     * 登録してしまう。長さと改行は保つので、見つけた位置はそのまま元のテキストに使える。
+     *
+     * <p>宣言の PHPDoc だけは残す。読みたいものがそこにある。
+     */
+    static String maskLiterals(String text) {
+        char[] out = text.toCharArray();
+        int at = 0;
+        while (at < text.length()) {
+            char here = text.charAt(at);
+            if (text.startsWith("/**", at)) {
+                at = endOf(text, at + 3, "*/");
+            } else if (text.startsWith("/*", at)) {
+                at = blank(out, at, endOf(text, at + 2, "*/"));
+            } else if (text.startsWith("//", at) || (here == '#' && !text.startsWith("#[", at))) {
+                at = blank(out, at, endOfLine(text, at));
+            } else if (here == '\'' || here == '"') {
+                at = blank(out, at, endOfQuoted(text, at, here));
+            } else if (text.startsWith("<<<", at)) {
+                at = blank(out, at, endOfHeredoc(text, at));
+            } else {
+                at++;
+            }
+        }
+        return new String(out);
+    }
+
+    private static int endOf(String text, int from, String terminator) {
+        int found = text.indexOf(terminator, from);
+        return found < 0 ? text.length() : found + terminator.length();
+    }
+
+    private static int endOfLine(String text, int from) {
+        int found = text.indexOf('\n', from);
+        return found < 0 ? text.length() : found;
+    }
+
+    private static int endOfQuoted(String text, int from, char quote) {
+        for (int at = from + 1; at < text.length(); at++) {
+            char here = text.charAt(at);
+            if (here == '\\') {
+                at++;
+            } else if (here == quote) {
+                return at + 1;
+            }
+        }
+        return text.length();
+    }
+
+    /** `&lt;&lt;&lt;EOT` から、行頭に同じ名前が現れるところまで。nowdoc も引用の有無が違うだけで同じ。 */
+    private static int endOfHeredoc(String text, int from) {
+        Matcher opening = HEREDOC_OPENING.matcher(text);
+        if (!opening.find(from) || opening.start() != from) {
+            return from + 3;
+        }
+        Matcher closing = Pattern.compile("(?m)^\\s*" + Pattern.quote(opening.group(1)) + "\\b").matcher(text);
+        return closing.find(opening.end()) ? closing.end() : text.length();
+    }
+
+    /** 置き換えた範囲の終わりを返す。改行はそのまま残す。行頭を見る正規表現があるため。 */
+    private static int blank(char[] out, int from, int to) {
+        for (int at = from; at < to && at < out.length; at++) {
+            if (out[at] != '\n' && out[at] != '\r') {
+                out[at] = ' ';
+            }
+        }
+        return Math.max(to, from + 1);
     }
 
     /** ファイルのどこに何が書かれていたか。namespace と use はどちらも位置で効き方が変わる。 */
