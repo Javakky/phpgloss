@@ -50,11 +50,9 @@ public final class ReportedGapsTest extends BasePlatformTestCase {
         assertTrue("foreach の要素が shape にならない: " + typeOf(file, "row"),
                 typeOf(file, "row").contains("array{"));
 
-        // 要素の shape は入るが、そこへのキーアクセスはまだ `mixed` になる。PhpStorm は
-        // shape を内部の表現で持っており、こちらが文字列として足した型からは読み解かない。
-        // 直すには要素アクセスの側にも入る必要があり、それは別の作業になる
-        assertFalse("キーアクセスが解けるようになった。この制限の記述を消すこと: "
-                        + typeOf(file, "label"),
+        // 要素の shape が入るだけでなく、そこへのキーアクセスも解ける。以前は `mixed` に
+        // なっており、限界として書いていた (このテストが、直った瞬間に落ちて教えた)
+        assertTrue("キーアクセスの型が取れない: " + typeOf(file, "label"),
                 typeOf(file, "label").contains("non-empty-string"));
     }
 

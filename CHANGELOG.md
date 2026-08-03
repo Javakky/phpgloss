@@ -11,6 +11,12 @@
 
 
 
+## 0.84.0
+
+- Resolve an index access from the type argument of what is being indexed. `$rows->all()[0]` gave `mixed|array` for the same reason `foreach` did: PhpStorm reaches the element through the plural form, and a shape does not survive it.
+- Resolve a key access on a shape. `$row['label']` now gives what the shape says the key holds, whether the shape came from an index access or a `foreach`. This was written down as a limitation two versions ago; the test that recorded it failed the moment it stopped being true, which is what it was for.
+- A shape still does not survive a PHP array function (`array_map`, `array_filter`, `array_values`, `reset`) or `yield from`. Their return types come from PHP's own stubs and carry nothing from the argument. Recorded as a limitation, with the tests skipped rather than deleted.
+
 ## 0.83.0
 
 - Test that a shape survives `match`, a ternary, `try`/`catch` and `??`. All four hold, and all four stop holding when alias expansion is disabled — PhpStorm alone gives `array`. Narrowing after an early return and destructuring assignment work without help; those tests guard against breaking them.
