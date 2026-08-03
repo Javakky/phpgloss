@@ -11,9 +11,17 @@ import java.util.regex.Pattern;
 import io.github.javakky.phpgloss.model.SourceRange;
 
 public final class PhpFileModelParser {
-    private static final Pattern NAMESPACE_PATTERN = Pattern.compile("(?m)^\\s*namespace\\s+([^;{]+)\\s*[;{]");
-    private static final Pattern USE_PATTERN = Pattern.compile("(?m)^\\s*use\\s+([^;]+);");
-    private static final Pattern GROUP_USE_PATTERN = Pattern.compile("(?s)^(.+?)\\\\\\{(.*)\\}$");
+    /**
+     * 行頭のものを拾う正規表現は、空白の指定を空白とタブに限る。
+     *
+     * <p>`\\s` は改行を含む。行頭に置いた `\\s*` は次の行の中身まで食いに行き、そこで外れると
+     * 一文字ずらしてまた食う。文字列を伏せたあとのファイルは空白が続くので、これが積もって
+     * 一つのファイルの走査に数十秒かかる。行をまたがないと書けば、走査は行の長さで収まる。
+     */
+    private static final Pattern NAMESPACE_PATTERN =
+            Pattern.compile("(?m)^[ \\t]*namespace[ \\t]+([^;{\\n]{1,512})[ \\t]*[;{]");
+    private static final Pattern USE_PATTERN = Pattern.compile("(?m)^[ \\t]*use[ \\t]+([^;]{1,4096});");
+    private static final Pattern GROUP_USE_PATTERN = Pattern.compile("(?s)^([^{]{1,512})\\\\\\{([^}]{0,4096})\\}$");
     private static final Pattern HEREDOC_OPENING =
             Pattern.compile("<<<[ \\t]*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?[ \\t]*\\r?\\n");
     /** `<<<` から識別子と改行までの長さの上限。これを超えるならヒアドキュメントの開始ではない。 */
@@ -29,7 +37,7 @@ public final class PhpFileModelParser {
      */
     private static final Pattern CLASS_LIKE_PATTERN = Pattern.compile(
             "(?s)/\\*\\*(?:(?!\\*/).)*\\*/\\s*"
-                    + "(?:#\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\]\\s*)*"
+                    + "(?:#\\[[^\\]]{0,4096}\\]\\s*)*"
                     + "(?:(?:final|abstract|readonly)\\s+)*"
                     + "(class|interface|trait|enum)\\s+([A-Za-z_][A-Za-z0-9_]*)");
 

@@ -11,6 +11,10 @@
 
 
 
+## 0.92.0
+
+- Indexing no longer freezes the IDE. The expressions that find `namespace` and `use` at the start of a line used `\\s*`, which crosses newlines: on a miss it ate into the next line and started over one character along. Masking string literals (0.90.0) left long runs of spaces for it to chew on, and one file could take over thirty seconds — with the whole IDE waiting on it.
+
 ## 0.91.0
 
 - Hover and Go to Declaration open on `@psalm-param`, `@psalm-return` and `@psalm-var`. Types resolved from those tags one version ago, but the reference under the caret was not recognised, so the type appeared without anywhere to jump to.

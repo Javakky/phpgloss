@@ -279,4 +279,34 @@ public final class PhpFileModelParserTest extends TestCase {
         assertEquals("属性を挟むと宣言の PHPDoc が読めない",
                 List.of("marked"), aliasNamesOf(model, "Probe\\Marked"));
     }
+
+    /**
+     * 大きなファイルを読み終わる。
+     *
+     * <p>行頭を見る正規表現に `\\s*` を書くと、外れるたびに次の行の中身まで食いに行く。索引は
+     * すべての PHP ファイルを通すので、一つが数十秒かかると IDE がそのあいだ止まる。実測で
+     * 三十五秒かかったことがある。時間で落ちるテストは環境で揺れるが、二乗と線形は桁が違う。
+     */
+    public void testFinishesOnALargeFile() {
+        StringBuilder source = new StringBuilder("<?php\nnamespace Probe;\n\n");
+        for (int at = 0; at < 4000; at++) {
+            source.append("    $sql%d = \"select * from t where a = ':a' and b = 1\";\n".formatted(at));
+            source.append("    // use Commented\\Out%d;\n".formatted(at));
+        }
+        source.append("""
+                /**
+                 * @phpstan-type tail array{id: int}
+                 */
+                final class Tail {}
+                """);
+
+        long startedAt = System.nanoTime();
+        PhpFileModel model = parser.parse(source.toString());
+        long elapsedMillis = (System.nanoTime() - startedAt) / 1_000_000;
+
+        assertEquals("大きなファイルの末尾の宣言が読めない",
+                List.of("tail"), aliasNamesOf(model, "Probe\\Tail"));
+        assertTrue("大きなファイル一つのパースに %d ms かかった".formatted(elapsedMillis),
+                elapsedMillis < 2_000);
+    }
 }
