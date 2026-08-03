@@ -241,4 +241,174 @@ public final class NarrowingTest extends BasePlatformTestCase {
         assertTrue("union から一方に絞れない: " + raw(file, "seen"),
                 raw(file, "seen").contains("Leaf"));
     }
+
+    /**
+     * `match (true)` の腕で `object` を実装クラスへ絞り、その値を引数として渡す。
+     *
+     * <p>Symfony の `Descriptor::describe` がこの形。`object $object` を `instanceof` で振り分け、
+     * 腕の中で `describeInputArgument($object, ...)` に渡す。絞れていないと引数の型が合わない。
+     */
+    public void testNarrowsAnObjectParameterInsideMatchArms() {
+        myFixture.addFileToProject("Shapes.php", """
+                <?php
+                namespace Probe;
+
+                final class Argument {}
+                final class Option {}
+
+                abstract class Describer
+                {
+                    public function describe(object $object): void
+                    {
+                        match (true) {
+                            $object instanceof Argument => $this->onArgument($object),
+                            $object instanceof Option => $this->onOption($object),
+                            default => null,
+                        };
+                    }
+
+                    abstract protected function onArgument(Argument $argument): void;
+
+                    abstract protected function onOption(Option $option): void;
+                }
+                """);
+        PsiFile file = myFixture.configureByText("probe_match_object.php", """
+                <?php
+                namespace Probe;
+
+                function probe(object $object): void
+                {
+                    $seen = match (true) {
+                        $object instanceof Argument => $object,
+                        default => null,
+                    };
+                }
+                """);
+        myFixture.openFileInEditor(file.getVirtualFile());
+
+        assertTrue("object 型の引数が match の腕で絞られない: " + raw(file, "seen"),
+                raw(file, "seen").contains("Argument"));
+    }
+
+    /** 絞った値を引数として渡す位置でも、絞った型のままである。 */
+    public void testKeepsTheNarrowedTypeAtAnArgumentPosition() {
+        PsiFile file = myFixture.configureByText("probe_pass.php", """
+                <?php
+                namespace Probe;
+
+                final class Argument {}
+
+                function consume(Argument $argument): void {}
+
+                function probe(object $object): void
+                {
+                    match (true) {
+                        $object instanceof Argument => consume($object),
+                        default => null,
+                    };
+                }
+                """);
+        myFixture.openFileInEditor(file.getVirtualFile());
+
+        assertTrue("引数として渡す位置で絞った型が失われる: " + raw(file, "object"),
+                raw(file, "object").contains("Argument"));
+    }
+
+    /** 指定した位置の変数の型。腕がいくつもある `match` では、どの腕の変数かを選ぶ必要がある。 */
+    private String typeAt(PsiFile file, int offset) {
+        Variable variable = PsiTreeUtil.findElementOfClassAtOffset(file, offset, Variable.class, false);
+        assertNotNull("その位置に変数がない", variable);
+        return String.join("|", TypeUnionSimplifier.normalize(
+                ((PhpTypedElement) variable).getType().global(getProject())
+                        .getTypesWithParametrisedParts()));
+    }
+
+    /**
+     * 腕が並んだ `match (true)` の、三つめの腕。
+     *
+     * <p>Symfony の `Descriptor::describe` がこの形で、そこで絞れていないと報告された。腕が一つの
+     * ときは絞れるので、腕の数で挙動が変わるかを測る。
+     */
+    public void testNarrowsInTheThirdArmOfAMatch() {
+        String source = """
+                <?php
+                namespace Probe;
+
+                final class Argument {}
+                final class Option {}
+                final class Definition {}
+                final class Order {}
+
+                function onArgument(Argument $it): void {}
+                function onOption(Option $it): void {}
+                function onDefinition(Definition $it): void {}
+                function onOrder(Order $it): void {}
+
+                function probe(object $object): void
+                {
+                    match (true) {
+                        $object instanceof Argument => onArgument($object),
+                        $object instanceof Option => onOption($object),
+                        $object instanceof Definition => onDefinition($object),
+                        $object instanceof Order => onOrder($object),
+                        default => null,
+                    };
+                }
+                """;
+        PsiFile file = myFixture.configureByText("probe_arms.php", source);
+        myFixture.openFileInEditor(file.getVirtualFile());
+
+        int first = source.indexOf("onArgument($object)") + "onArgument($".length();
+        int third = source.indexOf("onDefinition($object)") + "onDefinition($".length();
+
+        assertTrue("一つめの腕で絞れない: " + typeAt(file, first),
+                typeAt(file, first).contains("Argument"));
+        assertTrue("三つめの腕で絞れない: " + typeAt(file, third),
+                typeAt(file, third).contains("Definition"));
+    }
+
+    /**
+     * 実物と同じ形をすべて揃える。抽象メソッドへの `$this->` 呼び出し、引数が二つ、
+     * `default` が `throw` 式、`match` の結果を捨てる文。どれかが効いているかを見る。
+     */
+    public void testNarrowsWhenTheArmCallsAnAbstractMethod() {
+        String source = """
+                <?php
+                namespace Probe;
+
+                final class Argument {}
+                final class Option {}
+                final class Definition {}
+
+                final class Bad extends \\RuntimeException {}
+
+                abstract class Describer
+                {
+                    protected string $sink;
+
+                    public function describe(object $object, array $options = []): void
+                    {
+                        match (true) {
+                            $object instanceof Argument => $this->onArgument($object, $options),
+                            $object instanceof Option => $this->onOption($object, $options),
+                            $object instanceof Definition => $this->onDefinition($object, $options),
+                            default => throw new Bad(\\sprintf('type "%s"', get_debug_type($object))),
+                        };
+                    }
+
+                    abstract protected function onArgument(Argument $argument, array $options = []): void;
+
+                    abstract protected function onOption(Option $option, array $options = []): void;
+
+                    abstract protected function onDefinition(Definition $definition, array $options = []): void;
+                }
+                """;
+        PsiFile file = myFixture.configureByText("probe_abstract.php", source);
+        myFixture.openFileInEditor(file.getVirtualFile());
+
+        int third = source.indexOf("$this->onDefinition($object") + "$this->onDefinition($".length();
+
+        assertTrue("抽象メソッド呼び出しの腕で絞れない: " + typeAt(file, third),
+                typeAt(file, third).contains("Definition"));
+    }
 }
