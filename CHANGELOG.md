@@ -11,6 +11,10 @@
 
 
 
+## 0.83.0
+
+- Test that a shape survives `match`, a ternary, `try`/`catch` and `??`. All four hold, and all four stop holding when alias expansion is disabled — PhpStorm alone gives `array`. Narrowing after an early return and destructuring assignment work without help; those tests guard against breaking them.
+
 ## 0.82.0
 
 - Drop coarser siblings from an inferred return type. Where no `@return` is written, the type comes from the `return` statements and the same expression gets read more than once, so `array<string, mixed>` sat beside `array<string, int|string>` and `int` beside `int<-1,-1>`. A member that another member in the same union refines is now dropped; members that differ in structure are left alone, since those are real alternatives.
