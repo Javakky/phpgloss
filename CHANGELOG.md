@@ -11,6 +11,12 @@
 
 
 
+## 0.89.0
+
+- A file with more than one `namespace` places each declaration in the one it was written under. Everything below the second `namespace` used to be given the first one's name, so its aliases were filed under a class that does not exist.
+- `use A\\{B, C as D}` is expanded. Group imports were skipped outright, and a name imported that way did not resolve.
+- An import is visible only inside its own `namespace`.
+
 ## 0.88.0
 
 - Aliases are read from every class in a file. A comment on a property or method used to be attached to the next declaration below it, and that declaration's own `@phpstan-type` was then never read — so a second class in the same file silently lost its aliases.

@@ -3,6 +3,7 @@ package io.github.javakky.phpgloss.parser;
 import junit.framework.TestCase;
 
 import java.util.List;
+import java.util.Map;
 
 /**
  * 宣言と、その直前に書かれた PHPDoc の対応。
@@ -69,6 +70,105 @@ public final class PhpFileModelParserTest extends TestCase {
 
         assertTrue("メンバのコメントが後ろのクラスの宣言 PHPDoc として読まれている",
                 aliasNamesOf(model, "Probe\\After").isEmpty());
+    }
+
+    /** ファイルに namespace が二つあれば、宣言は自分が書かれた側に属する。 */
+    public void testUsesTheNamespaceEachDeclarationSitsIn() {
+        PhpFileModel model = parser.parse("""
+                <?php
+                namespace First;
+
+                /**
+                 * @phpstan-type early array{a: int}
+                 */
+                final class Early {}
+
+                namespace Second;
+
+                /**
+                 * @phpstan-type late array{b: int}
+                 */
+                final class Late {}
+                """);
+
+        assertEquals("最初の namespace が読めない",
+                List.of("early"), aliasNamesOf(model, "First\\Early"));
+        assertEquals("二つめの namespace の宣言が、最初の namespace に入れられている",
+                List.of("late"), aliasNamesOf(model, "Second\\Late"));
+    }
+
+    /** 波括弧で囲む namespace でも同じ。 */
+    public void testUsesTheNamespaceOfABracedBlock() {
+        PhpFileModel model = parser.parse("""
+                <?php
+                namespace First {
+                    /**
+                     * @phpstan-type early array{a: int}
+                     */
+                    final class Early {}
+                }
+
+                namespace Second {
+                    /**
+                     * @phpstan-type late array{b: int}
+                     */
+                    final class Late {}
+                }
+                """);
+
+        assertEquals("波括弧の二つめの namespace が読めない",
+                List.of("late"), aliasNamesOf(model, "Second\\Late"));
+    }
+
+    /** まとめて書いた use が、一つずつ書いたときと同じに解ける。 */
+    public void testExpandsAGroupUse() {
+        PhpFileModel model = parser.parse("""
+                <?php
+                namespace Probe;
+
+                use Vendor\\Pack\\{Alpha, Beta as Renamed};
+                use Vendor\\Other\\Gamma;
+
+                /**
+                 * @phpstan-type held array{x: int}
+                 */
+                final class Holder {}
+                """);
+
+        Map<String, String> uses = model.classLikeDocBlocks().get(0).uses();
+        assertEquals("まとめ書きの一つめが解けない", "Vendor\\Pack\\Alpha", uses.get("Alpha"));
+        assertEquals("まとめ書きの中の as が解けない", "Vendor\\Pack\\Beta", uses.get("Renamed"));
+        assertEquals("並んだ普通の use が壊れている", "Vendor\\Other\\Gamma", uses.get("Gamma"));
+    }
+
+    /** use は自分の namespace のものだけが見える。 */
+    public void testKeepsUsesWithinTheirNamespace() {
+        PhpFileModel model = parser.parse("""
+                <?php
+                namespace First;
+
+                use Vendor\\Early;
+
+                /**
+                 * @phpstan-type a array{a: int}
+                 */
+                final class Early2 {}
+
+                namespace Second;
+
+                use Vendor\\Late;
+
+                /**
+                 * @phpstan-type b array{b: int}
+                 */
+                final class Late2 {}
+                """);
+
+        Map<String, String> second = model.classLikeDocBlocks().stream()
+                .filter(b -> b.fqcn().equals("Second\\Late2"))
+                .findFirst().orElseThrow().uses();
+        assertEquals("自分の namespace の use が見えない", "Vendor\\Late", second.get("Late"));
+        assertNull("別の namespace の use が混ざっている", second.get("Early"));
     }
 
     /** 属性を挟んでも宣言の PHPDoc は読める。 */
