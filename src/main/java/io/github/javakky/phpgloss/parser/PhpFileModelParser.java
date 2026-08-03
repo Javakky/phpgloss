@@ -12,7 +12,18 @@ import io.github.javakky.phpgloss.model.SourceRange;
 public final class PhpFileModelParser {
     private static final Pattern NAMESPACE_PATTERN = Pattern.compile("(?m)^\\s*namespace\\s+([^;{]+)\\s*[;{]");
     private static final Pattern USE_PATTERN = Pattern.compile("(?m)^\\s*use\\s+([^;]+);");
-    private static final Pattern CLASS_LIKE_PATTERN = Pattern.compile("(?s)/\\*\\*.*?\\*/\\s*(?:final\\s+|abstract\\s+|readonly\\s+)*(class|interface|trait|enum)\\s+([A-Za-z_][A-Za-z0-9_]*)");
+    /**
+     * 宣言と、その直前の PHPDoc。
+     *
+     * <p>コメントの中身を `.*?` で書くと、直後に宣言が来ないときに次の `*&#47;` まで伸びる。伸びた先に
+     * 別のクラスがあると、そのクラスの PHPDoc としてメンバのコメントが読まれ、本来の宣言 PHPDoc は
+     * 読まれない。`*&#47;` を含まない、と書いて伸びる余地をなくす。
+     */
+    private static final Pattern CLASS_LIKE_PATTERN = Pattern.compile(
+            "(?s)/\\*\\*(?:(?!\\*/).)*\\*/\\s*"
+                    + "(?:#\\[(?:[^\\[\\]]|\\[[^\\[\\]]*\\])*\\]\\s*)*"
+                    + "(?:(?:final|abstract|readonly)\\s+)*"
+                    + "(class|interface|trait|enum)\\s+([A-Za-z_][A-Za-z0-9_]*)");
 
     private final PhpDocAliasParser docParser = new PhpDocAliasParser();
 

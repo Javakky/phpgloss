@@ -18,6 +18,16 @@ public final class NarrowingTest extends BasePlatformTestCase {
             namespace Probe;
 
             interface Node {}
+
+            /**
+             * @phpstan-type leaf_data array{weight: positive-int}
+             */
+            final class Leaf implements Node
+            {
+                /** @var leaf_data */
+                public array $data = ['weight' => 1];
+            }
+
             final class Branch implements Node {}
 
             /**
@@ -46,24 +56,8 @@ public final class NarrowingTest extends BasePlatformTestCase {
                 .orElse("");
     }
 
-    /** エイリアスを持つ実装クラス。宣言を分けて、ファイル内の他の宣言と混ざらないようにする。 */
-    private static final String LEAF = """
-            <?php
-            namespace Probe;
-
-            /**
-             * @phpstan-type leaf_data array{weight: positive-int}
-             */
-            final class Leaf implements Node
-            {
-                /** @var leaf_data */
-                public array $data = ['weight' => 1];
-            }
-            """;
-
     private PsiFile withBody(String body) {
         myFixture.addFileToProject("Rows.php", PORT);
-        myFixture.addFileToProject("Leaf.php", LEAF);
         PsiFile file = myFixture.addFileToProject("probe%d.php".formatted(Math.abs(body.hashCode())), """
                 <?php
                 namespace Probe;

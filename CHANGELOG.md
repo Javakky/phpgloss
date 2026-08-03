@@ -11,6 +11,11 @@
 
 
 
+## 0.88.0
+
+- Aliases are read from every class in a file. A comment on a property or method used to be attached to the next declaration below it, and that declaration's own `@phpstan-type` was then never read — so a second class in the same file silently lost its aliases.
+- A PHPDoc separated from its declaration by an attribute is read.
+
 ## 0.87.0
 
 - A property that only exists on the narrowed type reads correctly after an `instanceof`. It was recorded as a limitation one version ago; the fixture that "proved" it had no such property at all, so the measurement was of nothing.
