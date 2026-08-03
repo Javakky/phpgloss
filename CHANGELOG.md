@@ -11,6 +11,10 @@
 
 
 
+## 0.87.0
+
+- A property that only exists on the narrowed type reads correctly after an `instanceof`. It was recorded as a limitation one version ago; the fixture that "proved" it had no such property at all, so the measurement was of nothing.
+
 ## 0.86.0
 
 - Read a shape written directly in `@return`, not only one reached through an alias. `@return array{kind: 'A', …}|array{kind: 'B', …}` was `array` to PhpStorm, and writing shapes inline is the ordinary way to write them.

@@ -52,8 +52,10 @@ public final class PhpStanFieldAliasTypeProvider implements PhpTypeProvider4 {
                     }
                 }
             }
-        } catch (Exception | LinkageError unavailable) {
-            // 索引の途中に呼ばれると解決が投げる。型を出さずに諦めるだけで足りる
+        } catch (Throwable unavailable) {
+            // 索引の構築中にも呼ばれ、そこで参照を引くと stub が組み立てられない。
+            // `DumbService` では捕まえられない状態があるので、投げられたものは何であれ
+            // 受けて型を出さずに諦める。索引が済めば通常どおり解ける
             return null;
         }
         return null;
