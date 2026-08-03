@@ -92,6 +92,8 @@ The plugin runs no external process and makes no network request. It does not ru
 - `typeAliases` from a PHPStan config file are not read.
 - A type variable with no `of` bound cannot be shown inside the function that declares it. PHPStan
   prints `E (function …)`; the IDE has no way to say that.
+- A property that only exists on the narrowed type is `mixed` after an `instanceof`. Resolving the
+  reference points at the class the variable was declared as, not the one it was narrowed to.
 - A shape does not survive a PHP array function. `array_map`, `array_filter`, `array_values`,
   `reset` and the rest have their return types fixed by PHP's own stubs, and the type arguments of
   what went in do not reach what comes out. Same for `yield from`.

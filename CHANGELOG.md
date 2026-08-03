@@ -11,6 +11,12 @@
 
 
 
+## 0.86.0
+
+- Read a shape written directly in `@return`, not only one reached through an alias. `@return array{kind: 'A', …}|array{kind: 'B', …}` was `array` to PhpStorm, and writing shapes inline is the ordinary way to write them.
+- Narrow a tagged union by the tag. Inside `if ($item['kind'] === 'A')` or the `'A' =>` arm of `match ($item['kind'])`, only the branch that carries that tag is used, so `$item['value']` gives that branch's type. Where the tag is undecided — a different variable, a value no branch carries — both branches stay.
+- A property that only exists on the narrowed type is still `mixed` after an `instanceof`; recorded as a limitation.
+
 ## 0.85.0
 
 - Expand an alias written on a property. `@var list<row>` on a field was `array` to PhpStorm; only method return types were being read. Promoted constructor properties are read too, where the type sits on the constructor's `@param` rather than on the property.

@@ -23,6 +23,8 @@ import java.util.Set;
  * 型引数から直接取れば形が残る。
  *
  * <p>添字が書かれた文字列で、対象が array shape なら、そのキーの型を返す。
+ *
+ * <p>shape の union は、囲む条件がタグを決めているならその枝だけに絞る ({@link TaggedUnion})。
  */
 public final class PhpStanArrayAccessTypeProvider implements PhpTypeProvider4 {
     @Override
@@ -42,8 +44,9 @@ public final class PhpStanArrayAccessTypeProvider implements PhpTypeProvider4 {
         }
         String key = writtenKeyOf(access.getIndex());
         PhpType result = new PhpType();
-        for (String member : target.getType().global(element.getProject())
-                .getTypesWithParametrisedParts()) {
+        java.util.List<String> members = TaggedUnion.membersFor(access,
+                target.getType().global(element.getProject()).getTypesWithParametrisedParts());
+        for (String member : members) {
             String type = key == null ? elementTypeOf(member) : shapeValueOf(member, key);
             if (type != null) {
                 result.add(type);

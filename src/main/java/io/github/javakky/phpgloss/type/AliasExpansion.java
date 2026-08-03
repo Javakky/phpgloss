@@ -65,7 +65,12 @@ final class AliasExpansion {
             return null;
         }
         String expanded = expand(declared, owner);
-        if (expanded == null || expanded.equals(declared)) {
+        if (expanded == null) {
+            return null;
+        }
+        // エイリアスを使わず shape を直に書くこともある (`@return array{kind: 'A', …}|…`)。
+        // 開くものが無くても、PhpStorm には `array` としか見えないので、書かれた形を入れる
+        if (expanded.equals(declared) && !declared.contains("array{")) {
             return null;
         }
         PhpType type = new PhpType();
@@ -168,7 +173,10 @@ final class AliasExpansion {
             return null;
         }
         String expanded = expand(declared, owner);
-        if (expanded == null || expanded.equals(declared)) {
+        if (expanded == null) {
+            return null;
+        }
+        if (expanded.equals(declared) && !declared.contains("array{")) {
             return null;
         }
         PhpType type = new PhpType();
