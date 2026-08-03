@@ -16,6 +16,8 @@ public final class PhpFileModelParser {
     private static final Pattern GROUP_USE_PATTERN = Pattern.compile("(?s)^(.+?)\\\\\\{(.*)\\}$");
     private static final Pattern HEREDOC_OPENING =
             Pattern.compile("<<<[ \\t]*[\"']?([A-Za-z_][A-Za-z0-9_]*)[\"']?[ \\t]*\\r?\\n");
+    /** `<<<` から識別子と改行までの長さの上限。これを超えるならヒアドキュメントの開始ではない。 */
+    private static final int MAX_HEREDOC_OPENING = 256;
     private static final Pattern AS_PATTERN =
             Pattern.compile("^(.+?)\\s+as\\s+([A-Za-z_][A-Za-z0-9_]*)$", Pattern.CASE_INSENSITIVE);
     /**
@@ -122,8 +124,11 @@ public final class PhpFileModelParser {
 
     /** `&lt;&lt;&lt;EOT` から、行頭に同じ名前が現れるところまで。nowdoc も引用の有無が違うだけで同じ。 */
     private static int endOfHeredoc(String text, int from) {
-        Matcher opening = HEREDOC_OPENING.matcher(text);
-        if (!opening.find(from) || opening.start() != from) {
+        // `find` はマッチしないとファイルの末尾まで走る。`<<<` は比較演算子の並びとしても書けるので、
+        // 開始位置だけを見る。ここを絞らないと、大きなファイルで走査が二乗になる
+        Matcher opening = HEREDOC_OPENING.matcher(text)
+                .region(from, Math.min(text.length(), from + MAX_HEREDOC_OPENING));
+        if (!opening.lookingAt()) {
             return from + 3;
         }
         Matcher closing = Pattern.compile("(?m)^\\s*" + Pattern.quote(opening.group(1)) + "\\b").matcher(text);

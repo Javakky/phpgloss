@@ -17,6 +17,8 @@
             <li>Key access on a shape imported from another file resolves, instead of
                 <code>mixed</code>.</li>
             <li>Aliases declared on interfaces and traits work the same as on classes.</li>
+            <li>The <code>@psalm-</code> spelling of every tag is read, with or without the
+                <code>=</code> Psalm allows between the name and the type.</li>
         </ul>
 
         <h3>Type keywords</h3>

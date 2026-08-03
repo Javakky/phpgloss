@@ -1,6 +1,9 @@
 package io.github.javakky.phpgloss.type;
 
 import com.intellij.psi.PsiFile;
+import com.jetbrains.php.lang.PhpFileType;
+import io.github.javakky.phpgloss.PhpStanTypeGotoDeclarationHandler;
+import io.github.javakky.phpgloss.doc.PhpStanTypeDocumentationTargetProvider;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.testFramework.fixtures.BasePlatformTestCase;
 import com.jetbrains.php.lang.psi.elements.PhpTypedElement;
@@ -181,5 +184,39 @@ public final class PsalmFlavourTest extends BasePlatformTestCase {
 
         assertTrue("psalm の宣言を phpstan の import で持ち込めない: " + raw(use, "mixedIn"),
                 raw(use, "mixedIn").contains("positive-int"));
+    }
+
+    /** hover と Ctrl+B も psalm の綴りで開く。型が出るのに飛べない、を防ぐ。 */
+    public void testHoverAndGotoWorkOnPsalmSpelling() {
+        String source = """
+                <?php
+                namespace Probe;
+
+                /**
+                 * @psalm-type user_row = array{id: positive-int}
+                 */
+                final class Port2
+                {
+                    /** @psalm-return list<user_row> */
+                    public function all(): array
+                    {
+                        return [];
+                    }
+                }
+                """;
+        PsiFile file = myFixture.configureByText(PhpFileType.INSTANCE, source);
+        int reference = source.lastIndexOf("user_row");
+        int definition = source.indexOf("user_row");
+
+        var documentation = new PhpStanTypeDocumentationTargetProvider().documentationTargets(file, reference);
+        assertSize(1, documentation);
+        assertNotNull("psalm の綴りだと hover に何も出ない",
+                documentation.getFirst().computeDocumentation());
+
+        var targets = new PhpStanTypeGotoDeclarationHandler()
+                .getGotoDeclarationTargets(file.findElementAt(reference), reference, myFixture.getEditor());
+        assertNotNull("psalm の綴りだと宣言へ飛べない", targets);
+        assertSize(1, targets);
+        assertTrue("飛び先が宣言でない", targets[0].getTextRange().contains(definition));
     }
 }

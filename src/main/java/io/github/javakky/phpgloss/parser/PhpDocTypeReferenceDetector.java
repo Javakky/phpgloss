@@ -6,13 +6,22 @@ import java.util.Optional;
 import java.util.Set;
 
 public final class PhpDocTypeReferenceDetector {
+    /**
+     * 型を書くタグ。同じことを三通りに書けるので、どれで書かれていても入口を開ける。
+     *
+     * <p>ここは hover と <kbd>Ctrl</kbd>+<kbd>B</kbd> の入口。型解決だけが綴りを知っていると、
+     * 型は出るのに定義へ飛べない、という食い違いになる。
+     */
     private static final Set<String> SUPPORTED_TAGS = Set.of(
             "@param",
             "@return",
             "@var",
             "@phpstan-param",
             "@phpstan-return",
-            "@phpstan-var"
+            "@phpstan-var",
+            "@psalm-param",
+            "@psalm-return",
+            "@psalm-var"
     );
 
     public Optional<DetectedTypeReference> detect(String rawPhpDoc, int docStartOffset, int fileOffset) {

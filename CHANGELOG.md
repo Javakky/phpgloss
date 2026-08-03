@@ -11,6 +11,11 @@
 
 
 
+## 0.91.0
+
+- Hover and Go to Declaration open on `@psalm-param`, `@psalm-return` and `@psalm-var`. Types resolved from those tags one version ago, but the reference under the caret was not recognised, so the type appeared without anywhere to jump to.
+- A large file with `<<<` in it is no longer scanned to the end for each occurrence.
+
 ## 0.90.0
 
 - The `@psalm-` spelling of every tag is read: `@psalm-type`, `@psalm-import-type`, `@psalm-param`, `@psalm-return`, `@psalm-var`. A project written against Psalm got nothing from this plugin before.
