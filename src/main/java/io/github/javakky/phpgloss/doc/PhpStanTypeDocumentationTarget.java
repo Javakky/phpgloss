@@ -70,7 +70,7 @@ public final class PhpStanTypeDocumentationTarget implements DocumentationTarget
     @Override
     public @Nullable DocumentationResult computeDocumentation() {
         var linkifier = new PhpStanTypeBodyLinkifier(
-                file.getProject(), target.resolvedType().definingClassFqcn());
+                file.getProject(), target.resolvedType().definingClassFqcn(), file);
         if (target.variableName() != null) {
             return DocumentationResult.documentation(
                     renderer.renderVariable(target.variableName(), target.resolvedType(), linkifier));

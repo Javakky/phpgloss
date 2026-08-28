@@ -1,7 +1,6 @@
 package io.github.javakky.phpgloss.doc;
 
 import com.intellij.lang.documentation.DocumentationMarkup;
-import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiFile;
 import com.jetbrains.php.lang.psi.elements.PhpClass;
 import io.github.javakky.phpgloss.PhpStanTypeResolverFacade;
@@ -50,13 +49,13 @@ final class PhpClassAliasDetails {
         StringBuilder builder = new StringBuilder();
         for (String name : names) {
             resolver.resolveInClass(file, fqcn, name)
-                    .ifPresent(resolved -> builder.append(section(file.getProject(), name, resolved)));
+                    .ifPresent(resolved -> builder.append(section(file, name, resolved)));
         }
         return builder.toString();
     }
 
-    private static String section(Project project, String name, PhpStanResolvedType resolved) {
-        var linkifier = new PhpStanTypeBodyLinkifier(project, resolved.definingClassFqcn());
+    private static String section(PsiFile file, String name, PhpStanResolvedType resolved) {
+        var linkifier = new PhpStanTypeBodyLinkifier(file.getProject(), resolved.definingClassFqcn(), file);
         StringBuilder builder = new StringBuilder();
         builder.append(DocumentationMarkup.CONTENT_START)
                 .append("<p><b>")

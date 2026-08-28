@@ -275,7 +275,7 @@ final class SimplifiedVariableTypeTarget implements DocumentationTarget {
     }
 
     private String linkedTypeText() {
-        String linked = new PhpStanTypeBodyLinkifier(variable.getProject(), null)
+        String linked = new PhpStanTypeBodyLinkifier(variable.getProject(), null, variable.getContainingFile())
                 .linkify(escape(typeText()));
         return aliased == null ? linked : withAliasLinks(linked);
     }

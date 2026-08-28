@@ -11,6 +11,10 @@
 
 
 
+## 0.94.0
+
+- Alias names inside a type body are links. `Mark = Bold|Italic` showed `Bold` and `Italic` as plain text, and `array{type: 'text', marks?: list<Mark>}` gave nowhere to click for `Mark`, so reading a type built from other aliases meant looking each one up by hand. Names declared or imported by the class the alias is defined in now open that alias, including when the hovered alias was imported from another class. Shape keys are still left alone.
+
 ## 0.93.0
 
 - Keywords are links in the rendered PHPDoc shown inside the editor, not only in Quick Documentation. `@param list<positive-int> $ids` used to render `positive-int` as plain coloured text with nowhere to click. Shape keys that happen to spell a keyword (`array{list: int}`) are still left alone.
